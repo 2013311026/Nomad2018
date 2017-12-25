@@ -3,6 +3,9 @@ from matplotlib import pyplot as plt
 
 import support_functions as sf
 
+from models import BaseModel
+from models import GBRModel
+
 labels = {}
 labels["id"] = 0
 labels["spacegroup"] = 1
@@ -38,8 +41,25 @@ if __name__ == "__main__":
     #     plot_two_features(data, key, "formation_energy_ev_natom")
     #     plot_two_features(data, key, "bandgap_energy_ev")
 
-    vectors, atoms = sf.read_geometry_file("/home/tadek/Coding/Kaggle/Nomad2018/train/1/geometry.xyz")
-    print(vectors)
-    print(atoms)
+    #vectors, atoms = sf.read_geometry_file("/home/tadek/Coding/Kaggle/Nomad2018/train/1/geometry.xyz")
+    #print(vectors)
+    #print(atoms)
 
-    print("n atoms: " + str(len(atoms)))
+    #print("n atoms: " + str(len(atoms)))
+
+    x = data[:, 1:13]
+    y = data[:, 13]
+
+    _, n_features = x.shape
+    #bm = BaseModel(n_features=n_features)
+    bm = GBRModel(n_features=n_features,
+                  verbose=1)
+
+    bm.fit(x, y)
+    y_pred = bm.predict(x)
+    print(y_pred)
+
+    rmsle = bm.evaluate(x, y)
+    print("rmsle: " + str(rmsle))
+
+

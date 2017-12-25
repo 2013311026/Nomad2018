@@ -30,3 +30,11 @@ def read_geometry_file(file_path):
         atoms.append(a)
 
     return vectors, atoms
+
+def save_submission_file(y, submission_file_name):
+    pass
+
+def pipeline_flow(x, model, submission_file_name):
+
+    y = model.predict(x)
+    save_submission_file(y, submission_file_name)
