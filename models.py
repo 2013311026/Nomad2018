@@ -1,6 +1,8 @@
 import numpy as np
 from sklearn.ensemble import GradientBoostingRegressor
 
+import support_functions as sf
+
 class BaseModel:
 
     def __init__(self,
@@ -48,6 +50,7 @@ class BaseModel:
 
         y_pred = np.dot(self.beta.T, xe)
 
+        y_pred = y_pred.reshape(-1, 1)
         #print("y_pred.shape; " + str(y_pred.shape))
         #print(y_pred)
         return y_pred
@@ -56,17 +59,9 @@ class BaseModel:
     def evaluate(self, x, y_true):
 
         y_pred = self.predict(x)
+        y_true = y_true.reshape((-1, 1))
 
-        y_true = y_true.reshape((1, -1))
-        y_pred = y_pred.reshape((1, -1))
-
-        lpi = np.log(y_pred + 1.0)
-        lai = np.log(y_true + 1.0)
-        s2 = (lpi - lai)*(lpi - lai)
-
-        # Root mean squared logaritmic error
-        rmsle = np.sqrt((1.0/self.n_features)*np.sum(s2))
-
+        rmsle = sf.root_mean_squared_logarithmic_error(y_true, y_pred)
         return rmsle
 
 class GBRModel(BaseModel):
@@ -90,4 +85,5 @@ class GBRModel(BaseModel):
 
     def predict(self, x):
         y_pred = self.model.predict(x)
+        y_pred = y_pred.reshape(-1, 1)
         return y_pred

@@ -1,3 +1,5 @@
+import numpy as np
+
 from support_classes import Atom
 
 def read_geometry_file(file_path):
@@ -31,10 +33,39 @@ def read_geometry_file(file_path):
 
     return vectors, atoms
 
-def save_submission_file(y, submission_file_name):
-    pass
 
-def pipeline_flow(x, model, submission_file_name):
+def root_mean_squared_logarithmic_error(y_true, y_pred):
+    # y_true and y_pred should
 
-    y = model.predict(x)
-    save_submission_file(y, submission_file_name)
+    n, _ = y_true.shape
+    m, _ = y_pred.shape
+
+    assert n == m, "y_true and y_pred shapes are not equal!"
+
+    lpi = np.log(y_pred + 1.0)
+    lai = np.log(y_true + 1.0)
+    s2 = (lpi - lai) * (lpi - lai)
+
+    rmsle = np.sqrt((1.0 / n) * np.sum(s2))
+
+    return rmsle
+
+
+def pipeline_flow(ids,
+                  x,
+                  formation_energy_model,
+                  band_gap_model,
+                  submission_file_name):
+
+    with open(submission_file_name, "w") as f:
+
+        f.write("id,formation_energy_ev_natom,bandgap_energy_ev\n")
+        m, n = x.shape
+        for i in range(m):
+            id = int(ids[i])
+            fe = formation_energy_model.predict(x[i, :].reshape(1, -1))
+            bg = band_gap_model.predict(x[i, :].reshape(1, -1))
+            print("id: {0}, fe: {1}, bg: {2}".format(id, fe[0][0], bg[0][0]))
+
+            f.write("{0},{1},{2}\n".format(id, fe[0][0], bg[0][0]))
+        f.close()

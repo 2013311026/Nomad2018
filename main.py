@@ -47,19 +47,45 @@ if __name__ == "__main__":
 
     #print("n atoms: " + str(len(atoms)))
 
-    x = data[:, 1:13]
-    y = data[:, 13]
+    ids = data[:, 0]
+    x = data[:, 1:12]
+    y_fe = data[:, 12]
+    y_bg = data[:, 13]
 
     _, n_features = x.shape
     #bm = BaseModel(n_features=n_features)
-    bm = GBRModel(n_features=n_features,
-                  verbose=1)
 
-    bm.fit(x, y)
-    y_pred = bm.predict(x)
-    print(y_pred)
+    # Band gap model
+    bgm = GBRModel(n_features=n_features,
+                   verbose=1)
 
-    rmsle = bm.evaluate(x, y)
-    print("rmsle: " + str(rmsle))
+    # Formation energy model
+    fem = GBRModel(n_features=n_features,
+                   verbose=1)
 
+    fem.fit(x, y_fe)
+    bgm.fit(x, y_bg)
+    y_fe_pred = fem.predict(x)
+    y_bg_pred = bgm.predict(x)
 
+    print("y_fe_pred.shape: {0}".format(y_fe_pred.shape))
+    print("y_bg_pred.shape: {0}".format(y_bg_pred.shape))
+
+    rmsle_fe = fem.evaluate(x, y_fe)
+    rmsle_bg = bgm.evaluate(x, y_bg)
+
+    rmsle = np.mean(rmsle_bg + rmsle_fe)
+    print("rmsle_fe: " + str(rmsle_fe))
+    print("rmsle_bg: " + str(rmsle_bg))
+
+    #sf.pipeline_flow(x, bm, "temp")
+
+    test_data = np.loadtxt("test.csv", delimiter=",", skiprows=1)
+    test_ids = test_data[:, 0]
+    test_x = test_data[:, 1:12]
+
+    sf.pipeline_flow(ids,
+                     test_x,
+                     fem,
+                     bgm,
+                     "temp")
