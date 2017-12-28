@@ -1,6 +1,11 @@
 import numpy as np
+from mpl_toolkits.mplot3d import axes3d
+import matplotlib.pyplot as plt
+from matplotlib import cm
 
 from support_classes import Atom
+
+
 
 def read_geometry_file(file_path):
 
@@ -19,6 +24,7 @@ def read_geometry_file(file_path):
 
     vectors = [vec_x, vec_y, vec_z]
     atoms = []
+    atom_count = {}
     # Read the atoms.
     for i in range(6, len(lines)):
 
@@ -28,10 +34,15 @@ def read_geometry_file(file_path):
         z = float(ls[3])
         t = ls[4]
 
+        if t in atom_count:
+            atom_count[t] = atom_count[t] + 1
+        else:
+            atom_count[t] = 1
+
         a = Atom(x, y, z, t)
         atoms.append(a)
 
-    return vectors, atoms
+    return vectors, atoms, atom_count
 
 
 def root_mean_squared_logarithmic_error(y_true, y_pred):
@@ -65,7 +76,16 @@ def pipeline_flow(ids,
             id = int(ids[i])
             fe = formation_energy_model.predict(x[i, :].reshape(1, -1))
             bg = band_gap_model.predict(x[i, :].reshape(1, -1))
-            print("id: {0}, fe: {1}, bg: {2}".format(id, fe[0][0], bg[0][0]))
+            # print("id: {0}, fe: {1}, bg: {2}".format(id, fe[0][0], bg[0][0]))
 
             f.write("{0},{1},{2}\n".format(id, fe[0][0], bg[0][0]))
         f.close()
+
+
+if __name__ == "__main__":
+    file_path = "/home/tadek/Coding/Kaggle/Nomad2018/train/1/geometry.xyz"
+
+    vectors, atoms, atom_count = read_geometry_file(file_path)
+
+    for key, val in atom_count.items():
+        print("{0}: {1}".format(key, val))

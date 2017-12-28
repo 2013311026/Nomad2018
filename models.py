@@ -67,9 +67,9 @@ class BaseModel:
 class GBRModel(BaseModel):
 
     def __init__(self,
-                 n_estimators=100,
-                 learning_rate=0.1,
-                 max_depth=10,
+                 n_estimators=150,
+                 learning_rate=1.0,
+                 max_depth=20,
                  random_state=1,
                  verbose=0,
                  n_features=None):
