@@ -1,11 +1,18 @@
+import logging
 import numpy as np
 from mpl_toolkits.mplot3d import axes3d
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
+import global_flags as gf
 from support_classes import Atom
 
-
+logger = logging.getLogger(__name__)
+handler = logging.StreamHandler()
+formatter = logging.Formatter("%(asctime)s %(name)-12s %(levelname)-8s %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.setLevel(gf.LOGGING_LEVEL)
 
 def read_geometry_file(file_path):
 
@@ -80,6 +87,83 @@ def pipeline_flow(ids,
 
             f.write("{0},{1},{2}\n".format(id, fe[0][0], bg[0][0]))
         f.close()
+
+
+def cross_validate(x,
+                   y,
+                   model_class,
+                   model_parameters=None,
+                   fraction=0.1):
+
+    logger.debug("Cross validating data.")
+
+    n_samples, n_features = x.shape
+    window = int(fraction*n_samples)
+    n_slides = int(n_samples/window)
+
+    train_avg = 0.0
+    valid_avg = 0.0
+
+    for i in range(n_slides):
+        start_index = i*window
+        end_index = i*window + window
+
+        logger.debug("start_index: {0}".format(start_index))
+        logger.debug("end_index: {0}".format(end_index))
+
+        indexes_to_remove = [j for j in range(start_index, end_index)]
+
+        train_data = np.delete(x, indexes_to_remove, axis=0)
+        train_targets = np.delete(y, indexes_to_remove, axis=0).reshape((-1, 1))
+
+        logger.debug("train_data.shape: {0}".format(train_data.shape))
+        logger.debug("train_targets.shape: {0}".format(train_targets.shape))
+
+        valid_data = x[start_index:end_index, :]
+        valid_targets = y[start_index:end_index, :]
+
+        logger.debug("valid_data.shape: {0}".format(valid_data.shape))
+        logger.debug("valid_targets.shape: {0}".format(valid_targets.shape))
+
+        model = model_class(**model_parameters)
+
+        model.fit(train_data, train_targets.ravel())
+
+        rmsle_train = model.evaluate(train_data, train_targets)
+        rmsle_valid = model.evaluate(valid_data, valid_targets)
+
+        logger.info("i: {0}, rmsle_train: {1:.9f}, rmsle_valid: {2:.9f}".format(i, rmsle_train, rmsle_valid))
+
+        train_avg = train_avg + rmsle_train
+        valid_avg = valid_avg + rmsle_valid
+
+    train_avg = train_avg/n_slides
+    valid_avg = valid_avg / n_slides
+
+    logger.info("train_avg: {0}, valid_avg: {1}".format(train_avg, valid_avg))
+
+
+def get_percentage_of_o_atoms(percent_atom_al,
+                              percent_atom_ga,
+                              percent_atom_in):
+
+    """
+    This function is obsolete.
+    The percentages percent_atom_al, percent_atom_ga and
+    percent_atom_in always sum to one.
+
+
+    :param percent_atom_al:
+    :param percent_atom_ga:
+    :param percent_atom_in:
+    :return:
+    """
+
+    percent_atom_o = np.ones(percent_atom_al.shape)
+    percent_atom_o = percent_atom_o - percent_atom_al - percent_atom_ga - percent_atom_in
+
+    logger.info("percent_atom_o.shape: " + str(percent_atom_o.shape))
+    return percent_atom_o
 
 
 if __name__ == "__main__":

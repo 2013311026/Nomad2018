@@ -67,17 +67,19 @@ class BaseModel:
 class GBRModel(BaseModel):
 
     def __init__(self,
-                 n_estimators=150,
-                 learning_rate=1.0,
+                 n_estimators=100,
+                 learning_rate=0.1,
                  max_depth=20,
                  random_state=1,
                  verbose=0,
-                 n_features=None):
+                 n_features=None,
+                 max_features=None):
         BaseModel.__init__(self, "GradientBoostingClassifierModel", n_features=n_features)
         self.model = GradientBoostingRegressor(n_estimators=n_estimators,
                                                learning_rate=learning_rate,
                                                max_depth=max_depth,
                                                random_state=random_state,
+                                               max_features=max_features,
                                                verbose=verbose)
 
     def fit(self, x, y):

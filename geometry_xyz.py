@@ -17,7 +17,15 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 logger.setLevel(gf.LOGGING_LEVEL)
 
+# Sphere radious in which nearest
+# neighbours should be searched.
+NEAREST_NEIGHBOUR_RADIOUS = 3
 
+# Source: https://en.wikipedia.org/wiki/Atomic_radii_of_the_elements_(data_page)#dagger
+ga_radii_empirical = 1.3
+al_radii_empirical = 1.25
+in_radii_empirical = 1.55
+o_radii_empirical = 0.6
 
 ga_mass = 31.0
 al_mass = 13.0
@@ -211,14 +219,15 @@ def atom_density_per_A3(atoms, radious):
 def vector_length(vec):
     return np.sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2])
 
-def ef_density(id,
-               data_type="train",
-               n_x=5,
-               n_y=5,
-               n_z=5,
-               r=-1):
+def extract_features(id,
+                     data_type="train",
+                     n_x=5,
+                     n_y=5,
+                     n_z=5,
+                     r=-1):
     """
-    Extract features: atom density.
+    Extract features: atom density,
+                      percentage of atoms
 
     :param id:
     :param type:
@@ -227,6 +236,8 @@ def ef_density(id,
 
     logger.info("Creating feature: atom density.")
     vectors, uc_atoms = read_geometry_file(os.getcwd() + "/" + data_type + "/" + str(id) + "/geometry.xyz")
+
+    unit_cell_params = unit_cell_dimensions(vectors)
     atoms = build_structure(vectors,
                             uc_atoms,
                             n_x=n_x,
@@ -247,10 +258,186 @@ def ef_density(id,
 
     logger.info("atoms before cut: " + str(len(atoms)))
     atoms = cut_ball_from_structure(atoms, radious=r)
+
+    # nearest_neighbours(uc_atoms,
+    #                   atoms,
+    #                   atom_type="Al")
+
     logger.info("atoms before cut: {0}, r: {1}".format(len(atoms), r))
     atom_density = atom_density_per_A3(atoms, radious=r)
+    percentage_of_atoms = calculate_atom_percentages(atoms)
 
-    return atom_density
+    new_features = {}
+    new_features["atom_density"] = atom_density
+    new_features['percentage_of_atoms'] = percentage_of_atoms
+    new_features["unit_cell_params"] = unit_cell_params
+
+    return new_features
+
+
+def calculate_atom_percentages(atoms):
+
+    n_ga = 0
+    n_al = 0
+    n_in = 0
+    n_o = 0
+
+    tot = len(atoms)
+    for i in range(tot):
+        a = atoms[i]
+        if a.t == "Ga":
+            n_ga = n_ga + 1
+        elif a.t == "In":
+            n_in = n_in + 1
+        elif a.t == "Al":
+            n_al = n_al + 1
+        elif a.t == "O":
+            n_o = n_o + 1
+        else:
+            assert False, "Atom type not recognized!"
+
+    percentage_of_atoms = {}
+
+    p_ga = n_ga / tot
+    p_al = n_al / tot
+    p_in = n_in / tot
+    p_o = n_o / tot
+
+    percentage_of_atoms["percentage_of_ga"] = p_ga
+    percentage_of_atoms["percentage_of_al"] = p_al
+    percentage_of_atoms["percentage_of_in"] = p_in
+    percentage_of_atoms["percentage_of_o"] = p_o
+
+    logger.debug("p_ga: {0:.9f}; p_al: {1:.9f}; p_in: {2:.9f}; p_o: {3:.9f}".format(p_ga, p_al, p_in, p_o))
+
+    return percentage_of_atoms
+
+
+
+def nearest_neighbours(uc_atoms,
+                      atoms,
+                      atom_type="Al"):
+
+    """
+    Given an atom of atom_type finds the index of an atom
+    of this type that is closest to the origin.
+
+    """
+
+    logger.info("Getting nearest neighbours {0}".format(atom_type))
+
+    nn = {}
+
+    n_atoms_of_type = 0
+    for i in range(len(uc_atoms)):
+        logger.debug("Scanning UC for nn, i: {0}".format(i))
+        uc_a = uc_atoms[i]
+        if uc_a.t != atom_type:
+            continue
+
+        n_atoms_of_type = n_atoms_of_type + 1
+
+        for j in range(len(atoms)):
+            a = atoms[j]
+
+            dx = a.x - uc_a.x
+            dy = a.y - uc_a.y
+            dz = a.z - uc_a.z
+
+            d = np.sqrt(dx*dx + dy*dy + dz*dz)
+
+            if d > NEAREST_NEIGHBOUR_RADIOUS:
+                continue
+
+            d = round(d, 4)
+            logger.info("d: {0}".format(d))
+
+            if d in nn:
+                nn[d] = nn[d] + 1
+            else:
+                nn[d] = 1
+
+    logger.debug("Number of atoms with type {0}: {1}".format(atom_type, n_atoms_of_type))
+    for key, val in nn.items():
+        logger.debug("nn distance: {0}, nn val: {1}".format(key, val))
+
+    return 0
+
+
+def unit_cell_dimensions(vectors):
+
+    vec_a = vectors[0]
+    vec_b = vectors[1]
+    vec_c = vectors[2]
+
+    a = vector_length(vec_a)
+    b = vector_length(vec_b)
+    c = vector_length(vec_c)
+
+    a2 = a*a
+    b2 = b*b
+    c2 = c*c
+
+    vec_a_star = 2.0*np.pi*np.cross(vec_b, vec_c)/np.dot(vec_a, np.cross(vec_b, vec_c))
+    vec_b_star = 2.0*np.pi*np.cross(vec_c, vec_a)/np.dot(vec_b, np.cross(vec_c, vec_a))
+    vec_c_star = 2.0*np.pi*np.cross(vec_a, vec_b)/np.dot(vec_c, np.cross(vec_a, vec_b))
+
+    a_star = vector_length(vec_a_star)
+    b_star = vector_length(vec_b_star)
+    c_star = vector_length(vec_c_star)
+
+    a_star2 = a_star*a_star
+    b_star2 = b_star*b_star
+    c_star2 = c_star*c_star
+
+    unit_cell_params = {}
+
+    unit_cell_params["a"] = a
+    unit_cell_params["a2"] = a2
+    unit_cell_params["one_over_a"] = 1.0/a
+    unit_cell_params["one_over_a2"] = 1.0/a2
+    unit_cell_params["a_star"] = a_star
+    unit_cell_params["a_star2"] = a_star2
+    unit_cell_params["one_over_a_star"] = 1.0/a_star
+    unit_cell_params["one_over_a_star2"] = 1.0/a_star2
+
+
+    unit_cell_params["b"] = b
+    unit_cell_params["b2"] = b2
+    unit_cell_params["one_over_b"] = 1.0/b
+    unit_cell_params["one_over_b2"] = 1.0/b2
+    unit_cell_params["b_star"] = b_star
+    unit_cell_params["b_star2"] = b_star2
+    unit_cell_params["one_over_b_star"] = 1.0/b_star
+    unit_cell_params["one_over_b_star2"] = 1.0/b_star2
+
+    unit_cell_params["c"] = c
+    unit_cell_params["c2"] = c2
+    unit_cell_params["one_over_c"] = 1.0/c
+    unit_cell_params["one_over_c2"] = 1.0/c2
+    unit_cell_params["c_star"] = c_star
+    unit_cell_params["c_star2"] = c_star2
+    unit_cell_params["one_over_c_star"] = 1.0/c_star
+    unit_cell_params["one_over_c_star2"] = 1.0/c_star2
+
+    unit_cell_params["ga_radii_div_a"] = ga_radii_empirical / a
+    unit_cell_params["ga_radii_div_b"] = ga_radii_empirical / b
+    unit_cell_params["ga_radii_div_c"] = ga_radii_empirical / c
+
+    unit_cell_params["al_radii_div_a"] = al_radii_empirical / a
+    unit_cell_params["al_radii_div_b"] = al_radii_empirical / b
+    unit_cell_params["al_radii_div_c"] = al_radii_empirical / c
+
+    unit_cell_params["in_radii_div_a"] = in_radii_empirical / a
+    unit_cell_params["in_radii_div_b"] = in_radii_empirical / b
+    unit_cell_params["in_radii_div_c"] = in_radii_empirical / c
+
+    unit_cell_params["o_radii_div_a"] = o_radii_empirical / a
+    unit_cell_params["o_radii_div_b"] = o_radii_empirical / b
+    unit_cell_params["o_radii_div_c"] = o_radii_empirical / c
+
+    return unit_cell_params
+
 
 
 if __name__ == "__main__":
@@ -286,23 +473,79 @@ if __name__ == "__main__":
     y_bg = data[:, m-1].reshape(-1, 1)
 
     rho_data = np.zeros((n, 4))
-
+    percentage_atom_data = np.zeros((n, 4))
+    unit_cell_data = np.zeros((n, 36))
 
     for i in range(1, n):
         start = time.time()
         logger.info("===========================")
         logger.info("n: {0}, i: {1}".format(n, i))
         id = int(ids[i])
-        atom_density = ef_density(id=id,
-                   data_type="train",
-                   n_x=5,
-                   n_y=5,
-                   n_z=5,
-                   r=-1)
+        new_features = extract_features(id=id,
+                                        data_type="train",
+                                        n_x=4,
+                                        n_y=4,
+                                        n_z=4,
+                                        r=-1)
+
+        atom_density = new_features["atom_density"]
+        percentage_of_atoms = new_features["percentage_of_atoms"]
+        unit_cell_params = new_features["unit_cell_params"]
+
         rho_data[i][0] = atom_density["rho_Ga"]
         rho_data[i][1] = atom_density["rho_Al"]
         rho_data[i][2] = atom_density["rho_In"]
         rho_data[i][3] = atom_density["rho_O"]
+
+        percentage_atom_data[i][0] = percentage_of_atoms["percentage_of_ga"]
+        percentage_atom_data[i][1] = percentage_of_atoms["percentage_of_al"]
+        percentage_atom_data[i][2] = percentage_of_atoms["percentage_of_in"]
+        percentage_atom_data[i][3] = percentage_of_atoms["percentage_of_o"]
+
+        unit_cell_data[i][0] = unit_cell_params["a"]
+        unit_cell_data[i][1] = unit_cell_params["a2"]
+        unit_cell_data[i][2] = unit_cell_params["one_over_a"]
+        unit_cell_data[i][3] = unit_cell_params["one_over_a2"]
+        unit_cell_data[i][4] = unit_cell_params["a_star"]
+        unit_cell_data[i][5] = unit_cell_params["a_star2"]
+        unit_cell_data[i][6] = unit_cell_params["one_over_a_star"]
+        unit_cell_data[i][7] = unit_cell_params["one_over_a_star2"]
+
+        unit_cell_data[i][8] = unit_cell_params["b"]
+        unit_cell_data[i][9] = unit_cell_params["b2"]
+        unit_cell_data[i][10] = unit_cell_params["one_over_b"]
+        unit_cell_data[i][11] = unit_cell_params["one_over_b2"]
+        unit_cell_data[i][12] = unit_cell_params["b_star"]
+        unit_cell_data[i][13] = unit_cell_params["b_star2"]
+        unit_cell_data[i][14] = unit_cell_params["one_over_b_star"]
+        unit_cell_data[i][15] = unit_cell_params["one_over_b_star2"]
+
+        unit_cell_data[i][16] = unit_cell_params["c"]
+        unit_cell_data[i][17] = unit_cell_params["c2"]
+        unit_cell_data[i][18] = unit_cell_params["one_over_c"]
+        unit_cell_data[i][19] = unit_cell_params["one_over_c2"]
+        unit_cell_data[i][20] = unit_cell_params["c_star"]
+        unit_cell_data[i][21] = unit_cell_params["c_star2"]
+        unit_cell_data[i][22] = unit_cell_params["one_over_c_star"]
+        unit_cell_data[i][23] = unit_cell_params["one_over_c_star2"]
+
+        unit_cell_data[i][24] = unit_cell_params["ga_radii_div_a"]
+        unit_cell_data[i][25] = unit_cell_params["ga_radii_div_b"]
+        unit_cell_data[i][26] = unit_cell_params["ga_radii_div_c"]
+
+        unit_cell_data[i][27] = unit_cell_params["al_radii_div_a"]
+        unit_cell_data[i][28] = unit_cell_params["al_radii_div_b"]
+        unit_cell_data[i][29] = unit_cell_params["al_radii_div_c"]
+
+        unit_cell_data[i][30] = unit_cell_params["in_radii_div_a"]
+        unit_cell_data[i][31] = unit_cell_params["in_radii_div_b"]
+        unit_cell_data[i][32] = unit_cell_params["in_radii_div_c"]
+
+        unit_cell_data[i][33] = unit_cell_params["o_radii_div_a"]
+        unit_cell_data[i][34] = unit_cell_params["o_radii_div_b"]
+        unit_cell_data[i][35] = unit_cell_params["o_radii_div_c"]
+
+
 
         stop = time.time()
 
@@ -320,7 +563,12 @@ if __name__ == "__main__":
 
     new_data = np.hstack((ids, x, rho_data, y_fe, y_bg))
     rho_data = np.hstack((ids, rho_data))
+    percentage_atom_data = np.hstack((ids, percentage_atom_data))
+    unit_cell_data = np.hstack((ids, unit_cell_data))
 
     logger.info("new_data.shape: " + str(new_data.shape))
     np.savetxt("train_mod.csv", new_data, delimiter=",")
+
     np.savetxt("rho_data.csv", rho_data, delimiter=",")
+    np.savetxt("percentage_atom_data.csv", percentage_atom_data, delimiter=",")
+    np.savetxt("unit_cell_data.csv", unit_cell_data, delimiter=",")
