@@ -1,5 +1,7 @@
 import numpy as np
+import xgboost as xgb
 from sklearn.ensemble import GradientBoostingRegressor
+
 
 import support_functions as sf
 
@@ -81,6 +83,64 @@ class GBRModel(BaseModel):
                                                random_state=random_state,
                                                max_features=max_features,
                                                verbose=verbose)
+
+    def fit(self, x, y):
+        self.model.fit(x, y)
+
+    def predict(self, x):
+        y_pred = self.model.predict(x)
+        y_pred = y_pred.reshape(-1, 1)
+        return y_pred
+
+
+class XGBRegressorModel(BaseModel):
+
+    def __init__(self,
+                 n_features=None,
+                 max_depth=3,
+                 learning_rate=0.1,
+                 n_estimators=100,
+                 silent=True,
+                 objective='reg:linear',
+                 booster='gbtree',
+                 n_jobs=1,
+                 nthread=None,
+                 gamma=0,
+                 min_child_weight=1,
+                 max_delta_step=0,
+                 subsample=1,
+                 colsample_bytree=1,
+                 colsample_bylevel=1,
+                 reg_alpha=0,
+                 reg_lambda=1,
+                 scale_pos_weight=1,
+                 base_score=0.5,
+                 random_state=0,
+                 seed=None,
+                 missing=None):
+
+        BaseModel.__init__(self, "XGBRegressor", n_features=n_features)
+        self.model = xgb.XGBRegressor(max_depth=max_depth,
+                                      learning_rate=learning_rate,
+                                      n_estimators=n_estimators,
+                                      silent=silent,
+                                      objective=objective,
+                                      booster=booster,
+                                      n_jobs=n_jobs,
+                                      nthread=nthread,
+                                      gamma=gamma,
+                                      min_child_weight=min_child_weight,
+                                      max_delta_step=max_delta_step,
+                                      subsample=subsample,
+                                      colsample_bytree=colsample_bytree,
+                                      colsample_bylevel=colsample_bylevel,
+                                      reg_alpha=reg_alpha,
+                                      reg_lambda=reg_lambda,
+                                      scale_pos_weight=scale_pos_weight,
+                                      base_score=base_score,
+                                      random_state=random_state,
+                                      seed=seed,
+                                      missing=missing)
 
     def fit(self, x, y):
         self.model.fit(x, y)

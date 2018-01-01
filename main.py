@@ -8,6 +8,7 @@ import support_functions as sf
 
 from models import BaseModel
 from models import GBRModel
+from models import XGBRegressorModel
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
@@ -90,7 +91,7 @@ if __name__ == "__main__":
     # = np.hstack((x, rho_data[:, 1:]))
     #x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:]))
     #x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:], unit_cell_data[:, 1:]))
-    #x = np.hstack((x, unit_cell_data))
+    x = np.hstack((x, unit_cell_data))
     y_fe = data[:, m-2].reshape((-1, 1))
     y_bg = data[:, m-1].reshape((-1, 1))
 
@@ -108,10 +109,41 @@ if __name__ == "__main__":
                            "max_features": "sqrt",
                            "n_features": n_features}
 
+    # sf.cross_validate(x,
+    #                   y_bg,
+    #                   GBRModel,
+    #                   model_parameters=gbrmodel_parameters,
+    #                   fraction=0.1)
+
+
+    xgb_regressor_model_parameters = {"max_depth": 20,
+                                      "learning_rate": 0.1,
+                                      "n_estimators": 200,
+                                      "silent": True,
+                                      "objective": 'reg:linear',
+                                      "booster": 'gbtree',
+                                      "n_jobs": 1,
+                                      "nthread": None,
+                                      "gamma": 0,
+                                      "min_child_weight": 1,
+                                      "max_delta_step": 0,
+                                      "subsample": 1,
+                                      "colsample_bytree": 1,
+                                      "colsample_bylevel": 1,
+                                      "reg_alpha": 0,
+                                      "reg_lambda": 1,
+                                      "scale_pos_weight": 1,
+                                      "base_score": 0.5,
+                                      "random_state": 0,
+                                      "seed": None,
+                                      "missing": None,
+                                      "n_features": n_features}
+
+
     sf.cross_validate(x,
                       y_bg,
-                      GBRModel,
-                      model_parameters=gbrmodel_parameters,
+                      XGBRegressorModel,
+                      model_parameters=xgb_regressor_model_parameters,
                       fraction=0.1)
 
     # print("ids.shape: " + str(ids.shape))
