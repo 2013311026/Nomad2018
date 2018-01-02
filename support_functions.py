@@ -142,6 +142,7 @@ def cross_validate(x,
 
     logger.info("train_avg: {0}, valid_avg: {1}".format(train_avg, valid_avg))
 
+    print(str(train_avg) + "x" + str(valid_avg), end="")
 
 def get_percentage_of_o_atoms(percent_atom_al,
                               percent_atom_ga,

@@ -1,4 +1,5 @@
 import logging
+import sys
 import numpy as np
 import random
 from matplotlib import pyplot as plt
@@ -90,18 +91,29 @@ if __name__ == "__main__":
     #                                   data[i, labels["percent_atom_ga"]] +
     #                                   data[i, labels["percent_atom_in"]]))
 
-    # = np.hstack((x, rho_data[:, 1:]))
-    #x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:]))
-    #x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:], unit_cell_data[:, 1:]))
-    x = np.hstack((x,
-                   rho_data[:, 1:],
-                   percentage_atom_data[:, 1:],
-                   unit_cell_data[:, 1:],
-                   avg_nn_bond_lengths_data[:, 1:]))
+    features = sys.argv[1]
 
-    #x = np.hstack((x, unit_cell_data[:, 1:]))
-    #x = np.hstack((x, unit_cell_data[:, 1:], avg_nn_bond_lengths_data[:, 1:]))
-    #x = np.hstack((x, avg_nn_bond_lengths_data[:, 1:]))
+    if features == "rho_data":
+        x = np.hstack((x, rho_data[:, 1:]))
+    elif features == "rho_percentage_atom_data":
+        x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:]))
+    elif features == "rho_percentage_atom_unit_cell_data_data":
+        x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:], unit_cell_data[:, 1:]))
+    elif features == "rho_percentage_atom_unit_cell_data_avg_nn_bond_lengths_data":
+        x = np.hstack((x,
+                       rho_data[:, 1:],
+                       percentage_atom_data[:, 1:],
+                       unit_cell_data[:, 1:],
+                       avg_nn_bond_lengths_data[:, 1:]))
+    elif features == "unit_cell_data":
+        x = np.hstack((x, unit_cell_data[:, 1:]))
+    elif features == "unit_cell_avg_nn_bond_lengths_data":
+        x = np.hstack((x, unit_cell_data[:, 1:], avg_nn_bond_lengths_data[:, 1:]))
+    elif features == "avg_nn_bond_lengths_data":
+        x = np.hstack((x, avg_nn_bond_lengths_data[:, 1:]))
+    else:
+        pass
+
     y_fe = data[:, m-2].reshape((-1, 1))
     y_bg = data[:, m-1].reshape((-1, 1))
 
