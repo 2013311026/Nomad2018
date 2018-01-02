@@ -50,10 +50,12 @@ if __name__ == "__main__":
     rho_data = np.loadtxt("rho_data.csv", delimiter=",", skiprows=0)
     percentage_atom_data = np.loadtxt("percentage_atom_data.csv", delimiter=",", skiprows=0)
     unit_cell_data = np.loadtxt("unit_cell_data.csv", delimiter=",", skiprows=0)
+    avg_nn_bond_lengths_data = np.loadtxt("avg_nn_bond_lengths_data.csv", delimiter=",", skiprows=0)
 
     logger.info("rho_data.shape: {0}".format(rho_data.shape))
     logger.info("percentage_atom_data.shape: {0}".format(percentage_atom_data.shape))
     logger.info("unit_cell_data.shape: {0}".format(unit_cell_data.shape))
+    logger.info("avg_nn_bond_lengths_data.shape: {0}".format(avg_nn_bond_lengths_data.shape))
 
     # for key, _ in labels.items():
     #     plot_two_features(data, key, "formation_energy_ev_natom")
@@ -91,7 +93,15 @@ if __name__ == "__main__":
     # = np.hstack((x, rho_data[:, 1:]))
     #x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:]))
     #x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:], unit_cell_data[:, 1:]))
-    x = np.hstack((x, unit_cell_data))
+    x = np.hstack((x,
+                   rho_data[:, 1:],
+                   percentage_atom_data[:, 1:],
+                   unit_cell_data[:, 1:],
+                   avg_nn_bond_lengths_data[:, 1:]))
+
+    #x = np.hstack((x, unit_cell_data[:, 1:]))
+    #x = np.hstack((x, unit_cell_data[:, 1:], avg_nn_bond_lengths_data[:, 1:]))
+    #x = np.hstack((x, avg_nn_bond_lengths_data[:, 1:]))
     y_fe = data[:, m-2].reshape((-1, 1))
     y_bg = data[:, m-1].reshape((-1, 1))
 
@@ -115,10 +125,11 @@ if __name__ == "__main__":
     #                   model_parameters=gbrmodel_parameters,
     #                   fraction=0.1)
 
-
-    xgb_regressor_model_parameters = {"max_depth": 20,
+    seed = int(random.randint(1, 2**16 - 1))
+    colsample_bytree = random.random()
+    xgb_regressor_model_parameters = {"max_depth": 4,
                                       "learning_rate": 0.1,
-                                      "n_estimators": 200,
+                                      "n_estimators": 300,
                                       "silent": True,
                                       "objective": 'reg:linear',
                                       "booster": 'gbtree',
@@ -128,14 +139,14 @@ if __name__ == "__main__":
                                       "min_child_weight": 1,
                                       "max_delta_step": 0,
                                       "subsample": 1,
-                                      "colsample_bytree": 1,
+                                      "colsample_bytree": colsample_bytree,
                                       "colsample_bylevel": 1,
                                       "reg_alpha": 0,
                                       "reg_lambda": 1,
                                       "scale_pos_weight": 1,
                                       "base_score": 0.5,
-                                      "random_state": 0,
-                                      "seed": None,
+                                      "random_state": seed + 1,
+                                      "seed": seed,
                                       "missing": None,
                                       "n_features": n_features}
 
@@ -144,7 +155,7 @@ if __name__ == "__main__":
                       y_bg,
                       XGBRegressorModel,
                       model_parameters=xgb_regressor_model_parameters,
-                      fraction=0.1)
+                      fraction=0.25)
 
     # print("ids.shape: " + str(ids.shape))
     # print("x.shape: " + str(x.shape))

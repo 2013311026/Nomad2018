@@ -19,7 +19,8 @@ logger.setLevel(gf.LOGGING_LEVEL)
 
 # Sphere radious in which nearest
 # neighbours should be searched.
-NEAREST_NEIGHBOUR_RADIOUS = 3
+SEARCH_NEIGHBOUR_RADIOUS = 7.0
+EPSILON = 1e-12
 
 # Source: https://en.wikipedia.org/wiki/Atomic_radii_of_the_elements_(data_page)#dagger
 ga_radii_empirical = 1.3
@@ -259,9 +260,13 @@ def extract_features(id,
     logger.info("atoms before cut: " + str(len(atoms)))
     atoms = cut_ball_from_structure(atoms, radious=r)
 
-    # nearest_neighbours(uc_atoms,
-    #                   atoms,
-    #                   atom_type="Al")
+    # avg_bond = avg_nearest_neighbour_bond_length(uc_atoms,
+    #                                               atoms,
+    #                                               origin_atom_type="Al",
+    #                                               destination_atom="Al")
+
+    avg_nn_bond_lengths = avg_nearest_neighbour_bonds_between_atoms(uc_atoms,
+                                                                    atoms)
 
     logger.info("atoms before cut: {0}, r: {1}".format(len(atoms), r))
     atom_density = atom_density_per_A3(atoms, radious=r)
@@ -271,6 +276,7 @@ def extract_features(id,
     new_features["atom_density"] = atom_density
     new_features['percentage_of_atoms'] = percentage_of_atoms
     new_features["unit_cell_params"] = unit_cell_params
+    new_features["avg_nn_bond_lengths"] = avg_nn_bond_lengths
 
     return new_features
 
@@ -313,32 +319,106 @@ def calculate_atom_percentages(atoms):
     return percentage_of_atoms
 
 
-
-def nearest_neighbours(uc_atoms,
-                      atoms,
-                      atom_type="Al"):
-
-    """
-    Given an atom of atom_type finds the index of an atom
-    of this type that is closest to the origin.
-
+def avg_nearest_neighbour_bonds_between_atoms(uc_atoms,
+                                              atoms):
     """
 
-    logger.info("Getting nearest neighbours {0}".format(atom_type))
+
+    :param uc_atoms:
+    :param atoms:
+    :return:
+    """
+
+    logger.info("Calculating the average nearest neighbour bond lengths.")
+
+    # bond_pairs = {"Ga": ["Ga", "Al", "In", "O"],
+    #               "Al": ["Al", "In", "O"],
+    #               "In": ["In", "O"],
+    #               "O":  ["O"]}
+
+    bond_pair = [["Ga", "Ga"],
+                 ["Ga", "Al"],
+                 ["Ga", "In"],
+                 ["Ga",  "O"],
+                 ["Al", "Al"],
+                 ["Al", "In"],
+                 ["Al",  "O"],
+                 ["In", "In"],
+                 ["In",  "O"],
+                 ["O",   "O"]]
+
+    avg_nn_bond_lengths = {}
+
+    for i in range(len(bond_pair)):
+        origin_atom_type = bond_pair[i][0]
+        destination_atom = bond_pair[i][1]
+
+        origin_exists = check_if_atom_exists_in_structure(uc_atoms, origin_atom_type)
+        destination_exists = check_if_atom_exists_in_structure(uc_atoms, destination_atom)
+
+        if (origin_exists == False) or (destination_exists == False):
+            bond_str = origin_atom_type + "-" + destination_atom
+            avg_nn_bond_lengths[bond_str] = -1
+            continue
+
+        avg_bond_length = avg_nearest_neighbour_bond_length(uc_atoms,
+                                                            atoms,
+                                                            origin_atom_type=origin_atom_type,
+                                                            destination_atom=destination_atom)
+        bond_str = origin_atom_type + "-" + destination_atom
+        avg_nn_bond_lengths[bond_str] = avg_bond_length
+
+    for key, val in avg_nn_bond_lengths.items():
+        logger.info("avg_bond_length {0}: {1}".format(key, val))
+
+    return avg_nn_bond_lengths
+
+
+def check_if_atom_exists_in_structure(uc_atoms,
+                                      atom_type):
+
+    for i in range(len(uc_atoms)):
+        a = uc_atoms[i]
+        if a.t == atom_type:
+            return True
+
+    return False
+
+
+def avg_nearest_neighbour_bond_length(uc_atoms,
+                                      atoms,
+                                      origin_atom_type="Al",
+                                      destination_atom="Al"):
+
+    """
+    Given two atom types A and B finds the average distance
+    between their closes bond.
+
+    """
+
+    logger.info("Getting avg nearest neighbour bond beteewn {0} - {1}".format(origin_atom_type,
+                                                                              destination_atom))
 
     nn = {}
 
+    avg_bond_length = 0.0
     n_atoms_of_type = 0
     for i in range(len(uc_atoms)):
         logger.debug("Scanning UC for nn, i: {0}".format(i))
         uc_a = uc_atoms[i]
-        if uc_a.t != atom_type:
+        if uc_a.t != origin_atom_type:
             continue
 
         n_atoms_of_type = n_atoms_of_type + 1
+        minimal_distance = np.inf
 
         for j in range(len(atoms)):
             a = atoms[j]
+
+            if a.t != destination_atom:
+                continue
+            else:
+                destination_atom_exists = True
 
             dx = a.x - uc_a.x
             dy = a.y - uc_a.y
@@ -346,22 +426,32 @@ def nearest_neighbours(uc_atoms,
 
             d = np.sqrt(dx*dx + dy*dy + dz*dz)
 
-            if d > NEAREST_NEIGHBOUR_RADIOUS:
+
+            # if d > SEARCH_NEIGHBOUR_RADIOUS:
+            #     continue
+            # else:
+            #     atoms_to_far = False
+
+            d = round(d, 6)
+            # logger.info("d: {0}".format(d))
+
+            if d < EPSILON:
                 continue
 
-            d = round(d, 4)
-            logger.info("d: {0}".format(d))
+            if minimal_distance > d:
+                minimal_distance = d
 
-            if d in nn:
-                nn[d] = nn[d] + 1
-            else:
-                nn[d] = 1
+        # assert atoms_to_far==False, "No nearest atoms found! Try increasing the SEARCH_NEIGHBOUR_RADIOUS."
+        #logger.info("minimal_distance: {0}".format(minimal_distance))
+        avg_bond_length = avg_bond_length + minimal_distance
 
-    logger.debug("Number of atoms with type {0}: {1}".format(atom_type, n_atoms_of_type))
-    for key, val in nn.items():
-        logger.debug("nn distance: {0}, nn val: {1}".format(key, val))
+    avg_bond_length = avg_bond_length / n_atoms_of_type
 
-    return 0
+    # logger.debug("Number of atoms with type {0}: {1}".format(atom_type, n_atoms_of_type))
+    # for key, val in nn.items():
+    #     logger.debug("nn distance: {0}, nn val: {1}".format(key, val))
+
+    return avg_bond_length
 
 
 def unit_cell_dimensions(vectors):
@@ -400,7 +490,6 @@ def unit_cell_dimensions(vectors):
     unit_cell_params["a_star2"] = a_star2
     unit_cell_params["one_over_a_star"] = 1.0/a_star
     unit_cell_params["one_over_a_star2"] = 1.0/a_star2
-
 
     unit_cell_params["b"] = b
     unit_cell_params["b2"] = b2
@@ -475,6 +564,7 @@ if __name__ == "__main__":
     rho_data = np.zeros((n, 4))
     percentage_atom_data = np.zeros((n, 4))
     unit_cell_data = np.zeros((n, 36))
+    avg_nn_bond_lengths_data = np.zeros((n, 10))
 
     for i in range(1, n):
         start = time.time()
@@ -491,6 +581,7 @@ if __name__ == "__main__":
         atom_density = new_features["atom_density"]
         percentage_of_atoms = new_features["percentage_of_atoms"]
         unit_cell_params = new_features["unit_cell_params"]
+        avg_nn_bond_lengths = new_features["avg_nn_bond_lengths"]
 
         rho_data[i][0] = atom_density["rho_Ga"]
         rho_data[i][1] = atom_density["rho_Al"]
@@ -545,6 +636,17 @@ if __name__ == "__main__":
         unit_cell_data[i][34] = unit_cell_params["o_radii_div_b"]
         unit_cell_data[i][35] = unit_cell_params["o_radii_div_c"]
 
+        avg_nn_bond_lengths_data[i][0] = avg_nn_bond_lengths["Ga-Ga"]
+        avg_nn_bond_lengths_data[i][1] = avg_nn_bond_lengths["Ga-Al"]
+        avg_nn_bond_lengths_data[i][2] = avg_nn_bond_lengths["Ga-In"]
+        avg_nn_bond_lengths_data[i][3] = avg_nn_bond_lengths["Ga-O"]
+        avg_nn_bond_lengths_data[i][4] = avg_nn_bond_lengths["Al-Al"]
+        avg_nn_bond_lengths_data[i][5] = avg_nn_bond_lengths["Al-In"]
+        avg_nn_bond_lengths_data[i][6] = avg_nn_bond_lengths["Al-O"]
+        avg_nn_bond_lengths_data[i][7] = avg_nn_bond_lengths["In-In"]
+        avg_nn_bond_lengths_data[i][8] = avg_nn_bond_lengths["In-O"]
+        avg_nn_bond_lengths_data[i][9] = avg_nn_bond_lengths["O-O"]
+
 
 
         stop = time.time()
@@ -565,6 +667,7 @@ if __name__ == "__main__":
     rho_data = np.hstack((ids, rho_data))
     percentage_atom_data = np.hstack((ids, percentage_atom_data))
     unit_cell_data = np.hstack((ids, unit_cell_data))
+    avg_nn_bond_lengths_data = np.hstack((ids, avg_nn_bond_lengths_data))
 
     logger.info("new_data.shape: " + str(new_data.shape))
     np.savetxt("train_mod.csv", new_data, delimiter=",")
@@ -572,3 +675,4 @@ if __name__ == "__main__":
     np.savetxt("rho_data.csv", rho_data, delimiter=",")
     np.savetxt("percentage_atom_data.csv", percentage_atom_data, delimiter=",")
     np.savetxt("unit_cell_data.csv", unit_cell_data, delimiter=",")
+    np.savetxt("avg_nn_bond_lengths_data.csv", avg_nn_bond_lengths_data, delimiter=",")

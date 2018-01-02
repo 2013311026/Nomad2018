@@ -1,9 +1,19 @@
+import logging
 import numpy as np
 import xgboost as xgb
 from sklearn.ensemble import GradientBoostingRegressor
 
 
 import support_functions as sf
+import global_flags as gf
+
+logger = logging.getLogger(__name__)
+handler = logging.StreamHandler()
+formatter = logging.Formatter("%(asctime)s %(name)-12s %(levelname)-8s %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.setLevel(gf.LOGGING_LEVEL)
+
 
 class BaseModel:
 
@@ -144,6 +154,12 @@ class XGBRegressorModel(BaseModel):
 
     def fit(self, x, y):
         self.model.fit(x, y)
+
+        fi = self.model.feature_importances_
+        # logger.info("Number of features in feature_importances_: {0}".format(len(fi)))
+        # for i in range(len(fi)):
+        #     logger.info("feature_id: {0}; importance {1:.9f}".format(i, fi[i]))
+        #xgb.plot_importance(self.model)
 
     def predict(self, x):
         y_pred = self.model.predict(x)
