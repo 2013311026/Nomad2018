@@ -44,3 +44,22 @@ class Atom:
 
     def __repr__(self):
         return self.__str__()
+
+
+class UCAtoms(list):
+
+    def _count_atoms_of_type_t(self, t):
+        n_atoms = 0
+        for i in range(len(self)):
+            if self[i].t == t:
+                n_atoms = n_atoms + 1
+
+        return n_atoms
+
+    def __init__(self, *args):
+        super().__init__(self, *args)
+
+        self.n_ga_atoms = self._count_atoms_of_type_t("Ga")
+        self.n_al_atoms = self._count_atoms_of_type_t("Al")
+        self.n_in_atoms = self._count_atoms_of_type_t("In")
+        self.n_o_atoms = self._count_atoms_of_type_t("O")

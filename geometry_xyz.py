@@ -8,6 +8,7 @@ import glob
 import logging
 import numpy as np
 from support_classes import Atom
+from support_classes import UCAtoms
 import global_flags as gf
 
 logger = logging.getLogger(__name__)
@@ -83,6 +84,8 @@ def read_geometry_file(path_to_file):
         a = Atom(x, y, z, t)
         uc_atoms.append(a)
     logger.info("Geomtery file read.")
+    # uc_atoms = UCAtoms(uc_atoms)
+
     return vectors, uc_atoms
 
 
@@ -260,13 +263,8 @@ def extract_features(id,
     logger.info("atoms before cut: " + str(len(atoms)))
     atoms = cut_ball_from_structure(atoms, radious=r)
 
-    # avg_bond = avg_nearest_neighbour_bond_length(uc_atoms,
-    #                                               atoms,
-    #                                               origin_atom_type="Al",
-    #                                               destination_atom="Al")
-
-    avg_nn_bond_lengths = avg_nearest_neighbour_bonds_between_atoms(uc_atoms,
-                                                                    atoms)
+    nn_bond_properties = nearest_neighbour_bond_parameters(uc_atoms,
+                                                           atoms)
 
     logger.info("atoms before cut: {0}, r: {1}".format(len(atoms), r))
     atom_density = atom_density_per_A3(atoms, radious=r)
@@ -276,7 +274,7 @@ def extract_features(id,
     new_features["atom_density"] = atom_density
     new_features['percentage_of_atoms'] = percentage_of_atoms
     new_features["unit_cell_params"] = unit_cell_params
-    new_features["avg_nn_bond_lengths"] = avg_nn_bond_lengths
+    new_features["nn_bond_properties"] = nn_bond_properties
 
     return new_features
 
@@ -319,8 +317,8 @@ def calculate_atom_percentages(atoms):
     return percentage_of_atoms
 
 
-def avg_nearest_neighbour_bonds_between_atoms(uc_atoms,
-                                              atoms):
+def nearest_neighbour_bond_parameters(uc_atoms,
+                                      atoms):
     """
 
 
@@ -347,7 +345,7 @@ def avg_nearest_neighbour_bonds_between_atoms(uc_atoms,
                  ["In",  "O"],
                  ["O",   "O"]]
 
-    avg_nn_bond_lengths = {}
+    nn_bond_properties = {}
 
     for i in range(len(bond_pair)):
         origin_atom_type = bond_pair[i][0]
@@ -356,22 +354,33 @@ def avg_nearest_neighbour_bonds_between_atoms(uc_atoms,
         origin_exists = check_if_atom_exists_in_structure(uc_atoms, origin_atom_type)
         destination_exists = check_if_atom_exists_in_structure(uc_atoms, destination_atom)
 
+        avg_bond_str = "avg_" + origin_atom_type + "-" + destination_atom
+        std_bond_str = "std_" + origin_atom_type + "-" + destination_atom
+        max_bond_str = "max_" + origin_atom_type + "-" + destination_atom
+        min_bond_str = "min_" + origin_atom_type + "-" + destination_atom
+
         if (origin_exists == False) or (destination_exists == False):
-            bond_str = origin_atom_type + "-" + destination_atom
-            avg_nn_bond_lengths[bond_str] = -1
+            nn_bond_properties[avg_bond_str] = -1
+            nn_bond_properties[std_bond_str] = -1
+            nn_bond_properties[max_bond_str] = -1
+            nn_bond_properties[min_bond_str] = -1
             continue
 
-        avg_bond_length = avg_nearest_neighbour_bond_length(uc_atoms,
-                                                            atoms,
-                                                            origin_atom_type=origin_atom_type,
-                                                            destination_atom=destination_atom)
-        bond_str = origin_atom_type + "-" + destination_atom
-        avg_nn_bond_lengths[bond_str] = avg_bond_length
+        nn_b_p = nn_bond_parameters_between_two_specific_atoms(uc_atoms,
+                                                               atoms,
+                                                               origin_atom_type=origin_atom_type,
+                                                               destination_atom=destination_atom)
 
-    for key, val in avg_nn_bond_lengths.items():
-        logger.info("avg_bond_length {0}: {1}".format(key, val))
+        nn_bond_properties[avg_bond_str] = nn_b_p["avg_nn_bond_length"]
+        nn_bond_properties[std_bond_str] = nn_b_p["std_nn_bond_length"]
+        nn_bond_properties[max_bond_str] = nn_b_p["max_nn_bond"]
+        nn_bond_properties[min_bond_str] = nn_b_p["min_nn_bond"]
 
-    return avg_nn_bond_lengths
+
+    for key, val in sorted(nn_bond_properties.items()):
+        logger.info("bond props {0}: {1}".format(key, val))
+
+    return nn_bond_properties
 
 
 def check_if_atom_exists_in_structure(uc_atoms,
@@ -385,10 +394,10 @@ def check_if_atom_exists_in_structure(uc_atoms,
     return False
 
 
-def avg_nearest_neighbour_bond_length(uc_atoms,
-                                      atoms,
-                                      origin_atom_type="Al",
-                                      destination_atom="Al"):
+def nn_bond_parameters_between_two_specific_atoms(uc_atoms,
+                                                  atoms,
+                                                  origin_atom_type="Al",
+                                                  destination_atom="Al"):
 
     """
     Given two atom types A and B finds the average distance
@@ -401,7 +410,8 @@ def avg_nearest_neighbour_bond_length(uc_atoms,
 
     nn = {}
 
-    avg_bond_length = 0.0
+    #avg_bond_length = 0.0
+    nearest_neighbour_bonds_list = []
     n_atoms_of_type = 0
     for i in range(len(uc_atoms)):
         logger.debug("Scanning UC for nn, i: {0}".format(i))
@@ -426,7 +436,6 @@ def avg_nearest_neighbour_bond_length(uc_atoms,
 
             d = np.sqrt(dx*dx + dy*dy + dz*dz)
 
-
             # if d > SEARCH_NEIGHBOUR_RADIOUS:
             #     continue
             # else:
@@ -441,17 +450,30 @@ def avg_nearest_neighbour_bond_length(uc_atoms,
             if minimal_distance > d:
                 minimal_distance = d
 
-        # assert atoms_to_far==False, "No nearest atoms found! Try increasing the SEARCH_NEIGHBOUR_RADIOUS."
-        #logger.info("minimal_distance: {0}".format(minimal_distance))
-        avg_bond_length = avg_bond_length + minimal_distance
+        nearest_neighbour_bonds_list.append(minimal_distance)
 
-    avg_bond_length = avg_bond_length / n_atoms_of_type
+    avg_nn_bond_length = np.mean(nearest_neighbour_bonds_list)
+    std_nn_bond_length = np.std(nearest_neighbour_bonds_list)
+
+    max_nn_bond = np.max(nearest_neighbour_bonds_list)
+    min_nn_bond = np.min(nearest_neighbour_bonds_list)
+
+    logger.info("avg_nn_bond_length: {0}".format(avg_nn_bond_length))
+    logger.info("std_nn_bond_length: {0}".format(std_nn_bond_length))
+    logger.info("max_nn_bond: {0}".format(max_nn_bond))
+    logger.info("min_nn_bond: {0}".format(min_nn_bond))
 
     # logger.debug("Number of atoms with type {0}: {1}".format(atom_type, n_atoms_of_type))
     # for key, val in nn.items():
     #     logger.debug("nn distance: {0}, nn val: {1}".format(key, val))
 
-    return avg_bond_length
+    nn_bond_properties = {}
+    nn_bond_properties["avg_nn_bond_length"] = avg_nn_bond_length
+    nn_bond_properties["std_nn_bond_length"] = std_nn_bond_length
+    nn_bond_properties["max_nn_bond"] = max_nn_bond
+    nn_bond_properties["min_nn_bond"] = min_nn_bond
+
+    return nn_bond_properties
 
 
 def unit_cell_dimensions(vectors):
@@ -564,7 +586,7 @@ if __name__ == "__main__":
     rho_data = np.zeros((n, 4))
     percentage_atom_data = np.zeros((n, 4))
     unit_cell_data = np.zeros((n, 36))
-    avg_nn_bond_lengths_data = np.zeros((n, 10))
+    nn_bond_parameters_data = np.zeros((n, 40))
 
     for i in range(1, n):
         start = time.time()
@@ -581,7 +603,7 @@ if __name__ == "__main__":
         atom_density = new_features["atom_density"]
         percentage_of_atoms = new_features["percentage_of_atoms"]
         unit_cell_params = new_features["unit_cell_params"]
-        avg_nn_bond_lengths = new_features["avg_nn_bond_lengths"]
+        nn_bond_properties = new_features["nn_bond_properties"]
 
         rho_data[i][0] = atom_density["rho_Ga"]
         rho_data[i][1] = atom_density["rho_Al"]
@@ -636,18 +658,49 @@ if __name__ == "__main__":
         unit_cell_data[i][34] = unit_cell_params["o_radii_div_b"]
         unit_cell_data[i][35] = unit_cell_params["o_radii_div_c"]
 
-        avg_nn_bond_lengths_data[i][0] = avg_nn_bond_lengths["Ga-Ga"]
-        avg_nn_bond_lengths_data[i][1] = avg_nn_bond_lengths["Ga-Al"]
-        avg_nn_bond_lengths_data[i][2] = avg_nn_bond_lengths["Ga-In"]
-        avg_nn_bond_lengths_data[i][3] = avg_nn_bond_lengths["Ga-O"]
-        avg_nn_bond_lengths_data[i][4] = avg_nn_bond_lengths["Al-Al"]
-        avg_nn_bond_lengths_data[i][5] = avg_nn_bond_lengths["Al-In"]
-        avg_nn_bond_lengths_data[i][6] = avg_nn_bond_lengths["Al-O"]
-        avg_nn_bond_lengths_data[i][7] = avg_nn_bond_lengths["In-In"]
-        avg_nn_bond_lengths_data[i][8] = avg_nn_bond_lengths["In-O"]
-        avg_nn_bond_lengths_data[i][9] = avg_nn_bond_lengths["O-O"]
+        nn_bond_parameters_data[i][0] = nn_bond_properties["avg_Ga-Ga"]
+        nn_bond_parameters_data[i][1] = nn_bond_properties["avg_Ga-Al"]
+        nn_bond_parameters_data[i][2] = nn_bond_properties["avg_Ga-In"]
+        nn_bond_parameters_data[i][3] = nn_bond_properties["avg_Ga-O"]
+        nn_bond_parameters_data[i][4] = nn_bond_properties["avg_Al-Al"]
+        nn_bond_parameters_data[i][5] = nn_bond_properties["avg_Al-In"]
+        nn_bond_parameters_data[i][6] = nn_bond_properties["avg_Al-O"]
+        nn_bond_parameters_data[i][7] = nn_bond_properties["avg_In-In"]
+        nn_bond_parameters_data[i][8] = nn_bond_properties["avg_In-O"]
+        nn_bond_parameters_data[i][9] = nn_bond_properties["avg_O-O"]
 
+        nn_bond_parameters_data[i][10] = nn_bond_properties["std_Ga-Ga"]
+        nn_bond_parameters_data[i][11] = nn_bond_properties["std_Ga-Al"]
+        nn_bond_parameters_data[i][12] = nn_bond_properties["std_Ga-In"]
+        nn_bond_parameters_data[i][13] = nn_bond_properties["std_Ga-O"]
+        nn_bond_parameters_data[i][14] = nn_bond_properties["std_Al-Al"]
+        nn_bond_parameters_data[i][15] = nn_bond_properties["std_Al-In"]
+        nn_bond_parameters_data[i][16] = nn_bond_properties["std_Al-O"]
+        nn_bond_parameters_data[i][17] = nn_bond_properties["std_In-In"]
+        nn_bond_parameters_data[i][18] = nn_bond_properties["std_In-O"]
+        nn_bond_parameters_data[i][19] = nn_bond_properties["std_O-O"]
 
+        nn_bond_parameters_data[i][20] = nn_bond_properties["min_Ga-Ga"]
+        nn_bond_parameters_data[i][21] = nn_bond_properties["min_Ga-Al"]
+        nn_bond_parameters_data[i][22] = nn_bond_properties["min_Ga-In"]
+        nn_bond_parameters_data[i][23] = nn_bond_properties["min_Ga-O"]
+        nn_bond_parameters_data[i][24] = nn_bond_properties["min_Al-Al"]
+        nn_bond_parameters_data[i][25] = nn_bond_properties["min_Al-In"]
+        nn_bond_parameters_data[i][26] = nn_bond_properties["min_Al-O"]
+        nn_bond_parameters_data[i][27] = nn_bond_properties["min_In-In"]
+        nn_bond_parameters_data[i][28] = nn_bond_properties["min_In-O"]
+        nn_bond_parameters_data[i][29] = nn_bond_properties["min_O-O"]
+
+        nn_bond_parameters_data[i][30] = nn_bond_properties["max_Ga-Ga"]
+        nn_bond_parameters_data[i][31] = nn_bond_properties["max_Ga-Al"]
+        nn_bond_parameters_data[i][32] = nn_bond_properties["max_Ga-In"]
+        nn_bond_parameters_data[i][33] = nn_bond_properties["max_Ga-O"]
+        nn_bond_parameters_data[i][34] = nn_bond_properties["max_Al-Al"]
+        nn_bond_parameters_data[i][35] = nn_bond_properties["max_Al-In"]
+        nn_bond_parameters_data[i][36] = nn_bond_properties["max_Al-O"]
+        nn_bond_parameters_data[i][37] = nn_bond_properties["max_In-In"]
+        nn_bond_parameters_data[i][38] = nn_bond_properties["max_In-O"]
+        nn_bond_parameters_data[i][39] = nn_bond_properties["max_O-O"]
 
         stop = time.time()
 
@@ -667,7 +720,7 @@ if __name__ == "__main__":
     rho_data = np.hstack((ids, rho_data))
     percentage_atom_data = np.hstack((ids, percentage_atom_data))
     unit_cell_data = np.hstack((ids, unit_cell_data))
-    avg_nn_bond_lengths_data = np.hstack((ids, avg_nn_bond_lengths_data))
+    nn_bond_parameters_data = np.hstack((ids, nn_bond_parameters_data))
 
     logger.info("new_data.shape: " + str(new_data.shape))
     np.savetxt("train_mod.csv", new_data, delimiter=",")
@@ -675,4 +728,4 @@ if __name__ == "__main__":
     np.savetxt("rho_data.csv", rho_data, delimiter=",")
     np.savetxt("percentage_atom_data.csv", percentage_atom_data, delimiter=",")
     np.savetxt("unit_cell_data.csv", unit_cell_data, delimiter=",")
-    np.savetxt("avg_nn_bond_lengths_data.csv", avg_nn_bond_lengths_data, delimiter=",")
+    np.savetxt("nn_bond_parameters_data.csv", nn_bond_parameters_data, delimiter=",")
