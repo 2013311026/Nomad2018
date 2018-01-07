@@ -5,7 +5,7 @@ from sklearn.ensemble import GradientBoostingRegressor
 
 
 import support_functions as sf
-import global_flags as gf
+import global_flags_constanst as gf
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()

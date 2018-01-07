@@ -9,14 +9,14 @@ import logging
 import numpy as np
 from support_classes import Atom
 from support_classes import UCAtoms
-import global_flags as gf
+import global_flags_constanst as gfc
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
 formatter = logging.Formatter("%(asctime)s %(name)-12s %(levelname)-8s %(message)s")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-logger.setLevel(gf.LOGGING_LEVEL)
+logger.setLevel(gfc.LOGGING_LEVEL)
 
 # Sphere radious in which nearest
 # neighbours should be searched.
@@ -327,12 +327,7 @@ def nearest_neighbour_bond_parameters(uc_atoms,
     :return:
     """
 
-    logger.info("Calculating the average nearest neighbour bond lengths.")
-
-    # bond_pairs = {"Ga": ["Ga", "Al", "In", "O"],
-    #               "Al": ["Al", "In", "O"],
-    #               "In": ["In", "O"],
-    #               "O":  ["O"]}
+    logger.info("Calculating the average nearest neighbour bond parameters.")
 
     bond_pair = [["Ga", "Ga"],
                  ["Ga", "Al"],
@@ -394,6 +389,7 @@ def check_if_atom_exists_in_structure(uc_atoms,
     return False
 
 
+
 def nn_bond_parameters_between_two_specific_atoms(uc_atoms,
                                                   atoms,
                                                   origin_atom_type="Al",
@@ -421,6 +417,7 @@ def nn_bond_parameters_between_two_specific_atoms(uc_atoms,
 
         n_atoms_of_type = n_atoms_of_type + 1
         minimal_distance = np.inf
+        minimal_index = None
 
         for j in range(len(atoms)):
             a = atoms[j]
@@ -449,6 +446,7 @@ def nn_bond_parameters_between_two_specific_atoms(uc_atoms,
 
             if minimal_distance > d:
                 minimal_distance = d
+                minimal_index = j
 
         nearest_neighbour_bonds_list.append(minimal_distance)
 
@@ -473,7 +471,7 @@ def nn_bond_parameters_between_two_specific_atoms(uc_atoms,
     nn_bond_properties["max_nn_bond"] = max_nn_bond
     nn_bond_properties["min_nn_bond"] = min_nn_bond
 
-    return nn_bond_properties
+    return nn_bond_properties, minimal_index
 
 
 def unit_cell_dimensions(vectors):
@@ -605,6 +603,7 @@ if __name__ == "__main__":
         unit_cell_params = new_features["unit_cell_params"]
         nn_bond_properties = new_features["nn_bond_properties"]
 
+        # New features
         rho_data[i][0] = atom_density["rho_Ga"]
         rho_data[i][1] = atom_density["rho_Al"]
         rho_data[i][2] = atom_density["rho_In"]

@@ -4,7 +4,7 @@ from mpl_toolkits.mplot3d import axes3d
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
-import global_flags as gf
+import global_flags_constanst as gf
 from support_classes import Atom
 
 logger = logging.getLogger(__name__)

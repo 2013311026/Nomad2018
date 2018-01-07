@@ -7,20 +7,25 @@ def plot_performance(performance,
                      feature_types):
 
     plt.figure()
+
     for i in range(len(feature_types)):
 
         plt.plot(performance[:, i], label=feature_types[i], linewidth=3)
 
+    n, _ = performance.shape
+    plt.plot(0.09*np.ones((n, 1)), linewidth=1, linestyle="--")
+
     plt.legend(ncol=3)
     plt.show()
 
-feature_types = ["rho_data",
+feature_types = ["standard",
+                 "rho_data",
                  "rho_percentage_atom_data",
                  "rho_percentage_atom_unit_cell_data",
-                 "rho_percentage_atom_unit_cell_avg_nn_bond_lengths_data",
+                 "rho_percentage_atom_unit_cell_nn_bond_parameters_data",
                  "unit_cell_data",
-                 "unit_cell_avg_nn_bond_lengths_data",
-                 "avg_nn_bond_lengths_data"]
+                 "unit_cell_nn_bond_parameters_data",
+                 "nn_bond_parameters_data"]
 
 steps = 20
 n_features_types = len(feature_types)
@@ -32,8 +37,9 @@ for i in range(steps):
 
     for j in range(n_features_types):
 
+        print("Processing " + str(feature_types[j]))
         command = "python3 main.py " + feature_types[j]
-        output = os.popen("python3 main.py rho").readlines()
+        output = os.popen(command).readlines()
 
         res = output[0].split("x")
 

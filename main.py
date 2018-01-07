@@ -4,7 +4,7 @@ import numpy as np
 import random
 from matplotlib import pyplot as plt
 
-import global_flags as gf
+import global_flags_constanst as gfc
 import support_functions as sf
 
 from models import BaseModel
@@ -16,7 +16,7 @@ handler = logging.StreamHandler()
 formatter = logging.Formatter("%(asctime)s %(name)-12s %(levelname)-8s %(message)s")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-logger.setLevel(gf.LOGGING_LEVEL)
+logger.setLevel(gfc.LOGGING_LEVEL)
 
 
 labels = {}
@@ -35,6 +35,11 @@ labels["lattice_angle_gamma_degree"] = 11
 labels["formation_energy_ev_natom"] = 12
 labels["bandgap_energy_ev"] = 13
 
+
+def objective(y_true, y_pred):
+    pass
+
+
 def plot_two_features(data, x_label, y_label):
 
     x = data[:, labels[x_label]]
@@ -51,12 +56,14 @@ if __name__ == "__main__":
     rho_data = np.loadtxt("rho_data.csv", delimiter=",", skiprows=0)
     percentage_atom_data = np.loadtxt("percentage_atom_data.csv", delimiter=",", skiprows=0)
     unit_cell_data = np.loadtxt("unit_cell_data.csv", delimiter=",", skiprows=0)
-    avg_nn_bond_lengths_data = np.loadtxt("avg_nn_bond_lengths_data.csv", delimiter=",", skiprows=0)
+    nn_bond_parameters_data = np.loadtxt("nn_bond_parameters_data.csv", delimiter=",", skiprows=0)
+    symmetries_data = np.loadtxt("symmetries_data.csv", delimiter=",", skiprows=0)
 
     logger.info("rho_data.shape: {0}".format(rho_data.shape))
     logger.info("percentage_atom_data.shape: {0}".format(percentage_atom_data.shape))
     logger.info("unit_cell_data.shape: {0}".format(unit_cell_data.shape))
-    logger.info("avg_nn_bond_lengths_data.shape: {0}".format(avg_nn_bond_lengths_data.shape))
+    logger.info("nn_bond_parameters_data.shape: {0}".format(nn_bond_parameters_data.shape))
+    logger.info("symmetries_data.shape: {0}".format(symmetries_data.shape))
 
     # for key, _ in labels.items():
     #     plot_two_features(data, key, "formation_energy_ev_natom")
@@ -76,6 +83,8 @@ if __name__ == "__main__":
 
     ids = data[:, 0]
     x = data[:, 1:(m-2)]
+
+    logger.info("space_groups: {0}".format(np.unique(data[:,1])))
 
     # Create additional non geometry features.
     # percent_atom_o = sf.get_percentage_of_o_atoms(data[:, labels["percent_atom_al"]],
@@ -99,18 +108,29 @@ if __name__ == "__main__":
         x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:]))
     elif features == "rho_percentage_atom_unit_cell_data_data":
         x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:], unit_cell_data[:, 1:]))
-    elif features == "rho_percentage_atom_unit_cell_data_avg_nn_bond_lengths_data":
+    elif features == "rho_percentage_atom_unit_cell_data_nn_bond_parameters_data":
         x = np.hstack((x,
                        rho_data[:, 1:],
                        percentage_atom_data[:, 1:],
                        unit_cell_data[:, 1:],
-                       avg_nn_bond_lengths_data[:, 1:]))
+                       nn_bond_parameters_data[:, 1:]))
+    elif features == "rho_percentage_atom_unit_cell_data_nn_bond_parameters_symmetries_data":
+        x = np.hstack((x,
+                       rho_data[:, 1:],
+                       percentage_atom_data[:, 1:],
+                       unit_cell_data[:, 1:],
+                       nn_bond_parameters_data[:, 1:],
+                       symmetries_data[:, 1:]))
     elif features == "unit_cell_data":
         x = np.hstack((x, unit_cell_data[:, 1:]))
-    elif features == "unit_cell_avg_nn_bond_lengths_data":
-        x = np.hstack((x, unit_cell_data[:, 1:], avg_nn_bond_lengths_data[:, 1:]))
-    elif features == "avg_nn_bond_lengths_data":
-        x = np.hstack((x, avg_nn_bond_lengths_data[:, 1:]))
+    elif features == "unit_cell_nn_bond_parameters_data":
+        x = np.hstack((x, unit_cell_data[:, 1:], nn_bond_parameters_data[:, 1:]))
+    elif features == "nn_bond_parameters_data":
+        x = np.hstack((x, nn_bond_parameters_data[:, 1:]))
+    elif features == "nn_bond_parameters_symmetries_data":
+        x = np.hstack((x, nn_bond_parameters_data[:, 1:], symmetries_data[:, 1:]))
+    elif features == "standard":
+        pass
     else:
         pass
 
@@ -139,6 +159,7 @@ if __name__ == "__main__":
 
     seed = int(random.randint(1, 2**16 - 1))
     colsample_bytree = random.random()
+    subsample = random.random()
     xgb_regressor_model_parameters = {"max_depth": 4,
                                       "learning_rate": 0.1,
                                       "n_estimators": 300,
@@ -148,9 +169,9 @@ if __name__ == "__main__":
                                       "n_jobs": 1,
                                       "nthread": None,
                                       "gamma": 0,
-                                      "min_child_weight": 1,
+                                      "min_child_weight": 5,
                                       "max_delta_step": 0,
-                                      "subsample": 1,
+                                      "subsample": subsample,
                                       "colsample_bytree": colsample_bytree,
                                       "colsample_bylevel": 1,
                                       "reg_alpha": 0,
