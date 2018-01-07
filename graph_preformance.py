@@ -19,15 +19,18 @@ def plot_performance(performance,
     plt.show()
 
 feature_types = ["standard",
-                 "rho_data",
-                 "rho_percentage_atom_data",
-                 "rho_percentage_atom_unit_cell_data",
-                 "rho_percentage_atom_unit_cell_nn_bond_parameters_data",
+                 #"rho_data",
+                 #"rho_percentage_atom_data",
+                 #"rho_percentage_atom_unit_cell_data",
+                 #"rho_percentage_atom_unit_cell_nn_bond_parameters_data",
+                 "rho_percentage_atom_unit_cell_nn_bond_parameters_symmetries_data",
                  "unit_cell_data",
-                 "unit_cell_nn_bond_parameters_data",
+                 #"unit_cell_nn_bond_parameters_data",
+                 #"nn_bond_parameters_symmetries_data",
+                 "unit_cell_nn_bond_parameters_symmetries_data",
                  "nn_bond_parameters_data"]
 
-steps = 20
+steps = 10
 n_features_types = len(feature_types)
 performance_train = np.zeros((steps, n_features_types))
 performance_valid = np.zeros((steps, n_features_types))

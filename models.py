@@ -70,10 +70,30 @@ class BaseModel:
 
     def evaluate(self, x, y_true):
 
-        y_pred = self.predict(x)
-        y_true = y_true.reshape((-1, 1))
+        n, m = y_true.shape
 
-        rmsle = sf.root_mean_squared_logarithmic_error(y_true, y_pred)
+        if m == 1:
+            y_pred = self.predict(x)
+            y_true = y_true.reshape((-1, 1))
+
+            rmsle = sf.root_mean_squared_logarithmic_error(y_true, y_pred)
+        elif m == 2:
+            y_pred = self.predict(x)
+            y_true = y_true.reshape((-1, 2))
+
+            y_pred_0 = y_pred[:, 0]
+            y_pred_1 = y_pred[:, 1]
+
+            y_true_0 = y_true[:, 0]
+            y_true_1 = y_true[:, 1]
+
+            rmsle_0 = sf.root_mean_squared_logarithmic_error(y_true_0, y_pred_0)
+            rmsle_1 = sf.root_mean_squared_logarithmic_error(y_true_1, y_pred_1)
+
+            rmsle = (rmsle_0 + rmsle_1)/2.0
+        else:
+            pass
+
         return rmsle
 
 class GBRModel(BaseModel):

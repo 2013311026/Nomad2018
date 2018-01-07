@@ -50,6 +50,56 @@ global_atom_types = {"Ga": 0,
                      "Al": 0}
 
 
+def build_angle_triangles():
+
+    """
+    We want to calculate the angles between nearest
+    neighbour atoms.
+
+    For example the angle between Al-Ga-In
+
+        Al
+      /
+    Ga  <- angle to calculate
+      \
+       In
+
+    This function build a list of all possibilities.
+    Each possibility is treated as a triangle.
+
+    We will also calculate the distance between Al and In atoms.
+
+    :param uc_atoms:
+    :param atoms:
+    :return:
+    """
+
+    trangle_point_A = ["Ga", "Al", "In", "O"]
+    trangle_point_B_C = [["Ga", "Al"],
+                         ["Ga", "In"],
+                         ["Ga",  "O"],
+                         ["Al", "In"],
+                         [ "O", "In"],
+                         [ "O", "Al"]]
+
+    triangles = []
+    for i in range(len(trangle_point_A)):
+        for j in range(len(trangle_point_B_C)):
+
+            three_point = [trangle_point_A[i], trangle_point_B_C[j]]
+
+            triangles.append(three_point)
+
+    for k in range(len(triangles)):
+        logger.info(triangles[k])
+
+    return triangles
+
+
+# Constant table of triangles.
+triangles_list = build_angle_triangles()
+
+
 def read_geometry_file(path_to_file):
     """
     Read geometry file and save the contants into
@@ -199,7 +249,14 @@ def unite_cell_volume(vectors):
     return np.dot(vectors[0], np.cross(vectors[1], vectors[2]))
 
 
-def atom_density_per_A3(atoms, radious):
+def atom_density_per_a3(atoms, radious):
+    """
+    Atom density per cubic Angstrom.
+
+    :param atoms:
+    :param radious:
+    :return:
+    """
 
     volume = (4/3)*np.pi*radious*radious*radious
 
@@ -220,8 +277,10 @@ def atom_density_per_A3(atoms, radious):
 
     return atom_density
 
+
 def vector_length(vec):
     return np.sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2])
+
 
 def extract_features(id,
                      data_type="train",
@@ -230,11 +289,14 @@ def extract_features(id,
                      n_z=5,
                      r=-1):
     """
-    Extract features: atom density,
-                      percentage of atoms
+    Main function to extract features from the geometry file.
 
     :param id:
-    :param type:
+    :param data_type:
+    :param n_x:
+    :param n_y:
+    :param n_z:
+    :param r:
     :return:
     """
 
@@ -256,18 +318,22 @@ def extract_features(id,
 
         v_avg = np.mean([r0, r1, r2])
         r = v_avg*(np.mean([n_x, n_y, n_z])/3)
-        logger.info("r0: {0}, r1: {1}, r2: {2}, v_avg: {3}, r: {4}".format(r0, r1, r2, v_avg, r))
+        logger.debug("r0: {0}, r1: {1}, r2: {2}, v_avg: {3}, r: {4}".format(r0, r1, r2, v_avg, r))
 
     check_for_duplicates(atoms)
 
-    logger.info("atoms before cut: " + str(len(atoms)))
+    logger.debug("atoms before cut: " + str(len(atoms)))
     atoms = cut_ball_from_structure(atoms, radious=r)
+
+    # build_angle_triangles()
+    angles_and_rs = calculate_angles_of_nn_atoms(uc_atoms,
+                                                 atoms)
 
     nn_bond_properties = nearest_neighbour_bond_parameters(uc_atoms,
                                                            atoms)
 
-    logger.info("atoms before cut: {0}, r: {1}".format(len(atoms), r))
-    atom_density = atom_density_per_A3(atoms, radious=r)
+    logger.debug("atoms before cut: {0}, r: {1}".format(len(atoms), r))
+    atom_density = atom_density_per_a3(atoms, radious=r)
     percentage_of_atoms = calculate_atom_percentages(atoms)
 
     new_features = {}
@@ -275,11 +341,14 @@ def extract_features(id,
     new_features['percentage_of_atoms'] = percentage_of_atoms
     new_features["unit_cell_params"] = unit_cell_params
     new_features["nn_bond_properties"] = nn_bond_properties
+    new_features["angles_and_rs"] = angles_and_rs
 
     return new_features
 
 
 def calculate_atom_percentages(atoms):
+
+    logger.info("Calculating atom percentages.")
 
     n_ga = 0
     n_al = 0
@@ -320,7 +389,8 @@ def calculate_atom_percentages(atoms):
 def nearest_neighbour_bond_parameters(uc_atoms,
                                       atoms):
     """
-
+    For every possible nearest neighbour bond calculates the average
+    length, its standard deviation, is maximal and minimal values.
 
     :param uc_atoms:
     :param atoms:
@@ -333,11 +403,20 @@ def nearest_neighbour_bond_parameters(uc_atoms,
                  ["Ga", "Al"],
                  ["Ga", "In"],
                  ["Ga",  "O"],
+
+                 ["Al", "Ga"],
                  ["Al", "Al"],
                  ["Al", "In"],
                  ["Al",  "O"],
+
+                 ["In", "Ga"],
+                 ["In", "Al"],
                  ["In", "In"],
                  ["In",  "O"],
+
+                 ["O",  "Ga"],
+                 ["O",  "Al"],
+                 ["O",  "In"],
                  ["O",   "O"]]
 
     nn_bond_properties = {}
@@ -373,7 +452,7 @@ def nearest_neighbour_bond_parameters(uc_atoms,
 
 
     for key, val in sorted(nn_bond_properties.items()):
-        logger.info("bond props {0}: {1}".format(key, val))
+        logger.debug("bond props {0}: {1}".format(key, val))
 
     return nn_bond_properties
 
@@ -389,16 +468,21 @@ def check_if_atom_exists_in_structure(uc_atoms,
     return False
 
 
-
 def nn_bond_parameters_between_two_specific_atoms(uc_atoms,
                                                   atoms,
                                                   origin_atom_type="Al",
                                                   destination_atom="Al"):
 
     """
-    Given two atom types A and B finds the average distance
-    between their closes bond.
+    For every atom of type (origin_atom_type) in UC calculates: the average bond length,
+    the standard deviation of this length, the maximal bond length and
+    the minimal bond length to the nearest atom of another type (destination_atom).
 
+    :param uc_atoms:
+    :param atoms:
+    :param origin_atom_type:
+    :param destination_atom:
+    :return:
     """
 
     logger.info("Getting avg nearest neighbour bond beteewn {0} - {1}".format(origin_atom_type,
@@ -406,7 +490,6 @@ def nn_bond_parameters_between_two_specific_atoms(uc_atoms,
 
     nn = {}
 
-    #avg_bond_length = 0.0
     nearest_neighbour_bonds_list = []
     n_atoms_of_type = 0
     for i in range(len(uc_atoms)):
@@ -417,15 +500,12 @@ def nn_bond_parameters_between_two_specific_atoms(uc_atoms,
 
         n_atoms_of_type = n_atoms_of_type + 1
         minimal_distance = np.inf
-        minimal_index = None
 
         for j in range(len(atoms)):
             a = atoms[j]
 
             if a.t != destination_atom:
                 continue
-            else:
-                destination_atom_exists = True
 
             dx = a.x - uc_a.x
             dy = a.y - uc_a.y
@@ -446,7 +526,6 @@ def nn_bond_parameters_between_two_specific_atoms(uc_atoms,
 
             if minimal_distance > d:
                 minimal_distance = d
-                minimal_index = j
 
         nearest_neighbour_bonds_list.append(minimal_distance)
 
@@ -456,10 +535,10 @@ def nn_bond_parameters_between_two_specific_atoms(uc_atoms,
     max_nn_bond = np.max(nearest_neighbour_bonds_list)
     min_nn_bond = np.min(nearest_neighbour_bonds_list)
 
-    logger.info("avg_nn_bond_length: {0}".format(avg_nn_bond_length))
-    logger.info("std_nn_bond_length: {0}".format(std_nn_bond_length))
-    logger.info("max_nn_bond: {0}".format(max_nn_bond))
-    logger.info("min_nn_bond: {0}".format(min_nn_bond))
+    logger.debug("avg_nn_bond_length: {0}".format(avg_nn_bond_length))
+    logger.debug("std_nn_bond_length: {0}".format(std_nn_bond_length))
+    logger.debug("max_nn_bond: {0}".format(max_nn_bond))
+    logger.debug("min_nn_bond: {0}".format(min_nn_bond))
 
     # logger.debug("Number of atoms with type {0}: {1}".format(atom_type, n_atoms_of_type))
     # for key, val in nn.items():
@@ -471,10 +550,222 @@ def nn_bond_parameters_between_two_specific_atoms(uc_atoms,
     nn_bond_properties["max_nn_bond"] = max_nn_bond
     nn_bond_properties["min_nn_bond"] = min_nn_bond
 
-    return nn_bond_properties, minimal_index
+    return nn_bond_properties
+
+
+def find_closest_atom(origin_atom,
+                      destination_atom_type,
+                      atoms):
+
+    """
+    Finds an atom of type destination_atom_type that is
+    closest to the origin_atom.
+
+    :param origin_atom:
+    :param destination_atom_type:
+    :param atoms:
+    :return:
+    """
+
+    minimal_distance = np.inf
+    closest_a_x = None
+    closest_a_y = None
+    closest_a_z = None
+    closest_a_t = None
+
+    for i in range(len(atoms)):
+        a = atoms[i]
+
+        if a.t != destination_atom_type:
+            continue
+
+        dx = a.x - origin_atom.x
+        dy = a.y - origin_atom.y
+        dz = a.z - origin_atom.z
+
+        d = np.sqrt(dx * dx + dy * dy + dz * dz)
+
+        d = round(d, 6)
+        # logger.info("d: {0}".format(d))
+
+        if d < EPSILON:
+            continue
+
+        if minimal_distance > d:
+            minimal_distance = d
+            closest_a_x = a.x
+            closest_a_y = a.y
+            closest_a_z = a.z
+            closest_a_t = a.t
+
+    closest_atom = Atom(closest_a_x,
+                        closest_a_y,
+                        closest_a_z,
+                        closest_a_t)
+
+    return closest_atom
+
+
+def calculate_angles_of_nn_atoms(uc_atoms,
+                                 atoms):
+
+    logger.info("Calculating angles for given structure.")
+    nt = len(triangles_list)
+
+    angles_and_rs = {}
+    # Loop over possible triangles
+    for i in range(nt):
+        angle_list = []
+        r_list = []
+
+        origin_atom_type = triangles_list[i][0] # Triangle point A
+        bond_b_atom_type = triangles_list[i][1][0] # Triangle point B
+        bond_c_atom_type = triangles_list[i][1][1] # Triangle point C
+
+        avg_angle_str = "avg_angle_between_nn_bc_{0}_{1}_{2}".format(origin_atom_type,
+                                                                     bond_b_atom_type,
+                                                                     bond_c_atom_type)
+
+        std_angle_str = "std_angle_between_nn_bc_{0}_{1}_{2}".format(origin_atom_type,
+                                                                     bond_b_atom_type,
+                                                                     bond_c_atom_type)
+
+        max_angle_str = "max_angle_between_nn_bc_{0}_{1}_{2}".format(origin_atom_type,
+                                                                     bond_b_atom_type,
+                                                                     bond_c_atom_type)
+
+        min_angle_str = "min_angle_between_nn_bc_{0}_{1}_{2}".format(origin_atom_type,
+                                                                     bond_b_atom_type,
+                                                                     bond_c_atom_type)
+
+        avg_r_str = "avg_r_between_nn_bc_{0}_{1}_{2}".format(origin_atom_type,
+                                                             bond_b_atom_type,
+                                                             bond_c_atom_type)
+
+        std_r_str = "std_r_between_nn_bc_{0}_{1}_{2}".format(origin_atom_type,
+                                                             bond_b_atom_type,
+                                                             bond_c_atom_type)
+
+        max_r_str = "max_r_between_nn_bc_{0}_{1}_{2}".format(origin_atom_type,
+                                                             bond_b_atom_type,
+                                                             bond_c_atom_type)
+
+        min_r_str = "min_r_between_nn_bc_{0}_{1}_{2}".format(origin_atom_type,
+                                                             bond_b_atom_type,
+                                                             bond_c_atom_type)
+
+        logger.debug("origin_type: {0}, bond_B: {1}, bond_C: {2}".format(origin_atom_type,
+                                                                         bond_b_atom_type,
+                                                                         bond_c_atom_type))
+
+        origin_exists = check_if_atom_exists_in_structure(uc_atoms, origin_atom_type)
+        b_exists = check_if_atom_exists_in_structure(uc_atoms, bond_b_atom_type)
+        c_exists = check_if_atom_exists_in_structure(uc_atoms, bond_c_atom_type)
+
+        logger.debug("origin_exists: {0}; b_exists: {1}; c_exists: {2}".format(origin_exists,
+                                                                              b_exists,
+                                                                              c_exists))
+
+        if ((origin_exists is False) or
+            (b_exists is False) or
+            (c_exists is False)):
+
+            logger.debug("Trinagle not valid!")
+
+            angles_and_rs[avg_angle_str] = -1
+            angles_and_rs[std_angle_str] = -1
+            angles_and_rs[max_angle_str] = -1
+            angles_and_rs[min_angle_str] = -1
+
+            angles_and_rs[avg_r_str] = -1
+            angles_and_rs[std_r_str] = -1
+            angles_and_rs[max_r_str] = -1
+            angles_and_rs[min_r_str] = -1
+
+            continue
+
+        logger.debug("Triangle exists! Lets find angles!")
+
+        for j in range(len(uc_atoms)):
+
+            if uc_atoms[j].t != origin_atom_type:
+                continue
+
+            origin_atom = uc_atoms[j]
+            b_atom = find_closest_atom(origin_atom,
+                                       bond_b_atom_type,
+                                       atoms)
+
+            c_atom = find_closest_atom(origin_atom,
+                                       bond_c_atom_type,
+                                       atoms)
+
+            logger.debug("origin_atom: {0}".format(origin_atom))
+            logger.debug("b_atom: {0}".format(b_atom))
+            logger.debug("c_atom: {0}".format(c_atom))
+
+
+            vec_ab = [b_atom.x - origin_atom.x,
+                      b_atom.y - origin_atom.y,
+                      b_atom.z - origin_atom.z]
+
+            vec_ac = [c_atom.x - origin_atom.x,
+                      c_atom.y - origin_atom.y,
+                      c_atom.z - origin_atom.z]
+
+            vec_ab = np.array(vec_ab)
+            vec_ac = np.array(vec_ac)
+
+            dot12 = np.dot(vec_ab, vec_ac)
+            norm1 = vector_length(vec_ab)
+            norm2 = vector_length(vec_ac)
+
+            alpha = np.arccos(dot12 / (norm1 * norm2))
+
+            vec_cb = vec_ab - vec_ac
+
+            r = vector_length(vec_cb)
+
+            logger.debug("alpha: {0}; r: {1}".format(alpha, r))
+
+            angle_list.append(alpha)
+            r_list.append(r)
+
+        avg_angle_between_nn_bc = np.mean(angle_list)
+        std_angle_between_nn_bc = np.std(angle_list)
+        max_angle_between_nn_bc = np.max(angle_list)
+        min_angle_between_nn_bc = np.min(angle_list)
+
+        avg_r_between_nn_bc = np.mean(r_list)
+        std_r_between_nn_bc = np.std(r_list)
+        max_r_between_nn_bc = np.max(r_list)
+        min_r_between_nn_bc = np.min(r_list)
+
+        angles_and_rs[avg_angle_str] = avg_angle_between_nn_bc
+        angles_and_rs[std_angle_str] = std_angle_between_nn_bc
+        angles_and_rs[max_angle_str] = max_angle_between_nn_bc
+        angles_and_rs[min_angle_str] = min_angle_between_nn_bc
+
+        angles_and_rs[avg_r_str] = avg_r_between_nn_bc
+        angles_and_rs[std_r_str] = std_r_between_nn_bc
+        angles_and_rs[max_r_str] = max_r_between_nn_bc
+        angles_and_rs[min_r_str] = min_r_between_nn_bc
+
+
+    for key, val in sorted(angles_and_rs.items()):
+        logger.debug("angle or r: {0}, val: {1}".format(key, val))
+
+    return angles_and_rs
 
 
 def unit_cell_dimensions(vectors):
+    """
+    Calculates the basic unit cell dimensions and their variants.
+
+
+    :param vectors:
+    :return:
+    """
 
     vec_a = vectors[0]
     vec_b = vectors[1]
@@ -584,7 +875,8 @@ if __name__ == "__main__":
     rho_data = np.zeros((n, 4))
     percentage_atom_data = np.zeros((n, 4))
     unit_cell_data = np.zeros((n, 36))
-    nn_bond_parameters_data = np.zeros((n, 40))
+    nn_bond_parameters_data = np.zeros((n, 64))
+    angles_and_rs_data = np.zeros((n, 24*8))
 
     for i in range(1, n):
         start = time.time()
@@ -602,8 +894,18 @@ if __name__ == "__main__":
         percentage_of_atoms = new_features["percentage_of_atoms"]
         unit_cell_params = new_features["unit_cell_params"]
         nn_bond_properties = new_features["nn_bond_properties"]
+        angles_and_rs = new_features["angles_and_rs"]
 
         # New features
+
+        index = 0
+        # The dictionary needs to be sorted by keys so the features are
+        # always in the same order.
+        for key, val in sorted(angles_and_rs.items(), key=lambda t: t[0]):
+            logger.info("Writing {0} to array, value {1}".format(key, val))
+            angles_and_rs_data[i][index] = val
+            index = index + 1
+
         rho_data[i][0] = atom_density["rho_Ga"]
         rho_data[i][1] = atom_density["rho_Al"]
         rho_data[i][2] = atom_density["rho_In"]
@@ -657,49 +959,96 @@ if __name__ == "__main__":
         unit_cell_data[i][34] = unit_cell_params["o_radii_div_b"]
         unit_cell_data[i][35] = unit_cell_params["o_radii_div_c"]
 
-        nn_bond_parameters_data[i][0] = nn_bond_properties["avg_Ga-Ga"]
-        nn_bond_parameters_data[i][1] = nn_bond_properties["avg_Ga-Al"]
-        nn_bond_parameters_data[i][2] = nn_bond_properties["avg_Ga-In"]
-        nn_bond_parameters_data[i][3] = nn_bond_properties["avg_Ga-O"]
-        nn_bond_parameters_data[i][4] = nn_bond_properties["avg_Al-Al"]
-        nn_bond_parameters_data[i][5] = nn_bond_properties["avg_Al-In"]
-        nn_bond_parameters_data[i][6] = nn_bond_properties["avg_Al-O"]
-        nn_bond_parameters_data[i][7] = nn_bond_properties["avg_In-In"]
-        nn_bond_parameters_data[i][8] = nn_bond_properties["avg_In-O"]
-        nn_bond_parameters_data[i][9] = nn_bond_properties["avg_O-O"]
+        index = 0
+        # The dictionary needs to be sorted by keys so the features are
+        # always in the same order.
+        for key, val in sorted(nn_bond_properties.items(), key=lambda t: t[0]):
+            logger.info("Writing {0} to array, value {1}".format(key, val))
+            nn_bond_parameters_data[i][index] = val
+            index = index + 1
 
-        nn_bond_parameters_data[i][10] = nn_bond_properties["std_Ga-Ga"]
-        nn_bond_parameters_data[i][11] = nn_bond_properties["std_Ga-Al"]
-        nn_bond_parameters_data[i][12] = nn_bond_properties["std_Ga-In"]
-        nn_bond_parameters_data[i][13] = nn_bond_properties["std_Ga-O"]
-        nn_bond_parameters_data[i][14] = nn_bond_properties["std_Al-Al"]
-        nn_bond_parameters_data[i][15] = nn_bond_properties["std_Al-In"]
-        nn_bond_parameters_data[i][16] = nn_bond_properties["std_Al-O"]
-        nn_bond_parameters_data[i][17] = nn_bond_properties["std_In-In"]
-        nn_bond_parameters_data[i][18] = nn_bond_properties["std_In-O"]
-        nn_bond_parameters_data[i][19] = nn_bond_properties["std_O-O"]
-
-        nn_bond_parameters_data[i][20] = nn_bond_properties["min_Ga-Ga"]
-        nn_bond_parameters_data[i][21] = nn_bond_properties["min_Ga-Al"]
-        nn_bond_parameters_data[i][22] = nn_bond_properties["min_Ga-In"]
-        nn_bond_parameters_data[i][23] = nn_bond_properties["min_Ga-O"]
-        nn_bond_parameters_data[i][24] = nn_bond_properties["min_Al-Al"]
-        nn_bond_parameters_data[i][25] = nn_bond_properties["min_Al-In"]
-        nn_bond_parameters_data[i][26] = nn_bond_properties["min_Al-O"]
-        nn_bond_parameters_data[i][27] = nn_bond_properties["min_In-In"]
-        nn_bond_parameters_data[i][28] = nn_bond_properties["min_In-O"]
-        nn_bond_parameters_data[i][29] = nn_bond_properties["min_O-O"]
-
-        nn_bond_parameters_data[i][30] = nn_bond_properties["max_Ga-Ga"]
-        nn_bond_parameters_data[i][31] = nn_bond_properties["max_Ga-Al"]
-        nn_bond_parameters_data[i][32] = nn_bond_properties["max_Ga-In"]
-        nn_bond_parameters_data[i][33] = nn_bond_properties["max_Ga-O"]
-        nn_bond_parameters_data[i][34] = nn_bond_properties["max_Al-Al"]
-        nn_bond_parameters_data[i][35] = nn_bond_properties["max_Al-In"]
-        nn_bond_parameters_data[i][36] = nn_bond_properties["max_Al-O"]
-        nn_bond_parameters_data[i][37] = nn_bond_properties["max_In-In"]
-        nn_bond_parameters_data[i][38] = nn_bond_properties["max_In-O"]
-        nn_bond_parameters_data[i][39] = nn_bond_properties["max_O-O"]
+        # nn_bond_parameters_data[i][0] = nn_bond_properties["avg_Ga-Ga"]
+        # nn_bond_parameters_data[i][1] = nn_bond_properties["avg_Ga-Al"]
+        # nn_bond_parameters_data[i][2] = nn_bond_properties["avg_Ga-In"]
+        # nn_bond_parameters_data[i][3] = nn_bond_properties["avg_Ga-O"]
+        #
+        # nn_bond_parameters_data[i][4] = nn_bond_properties["avg_Al-Ga"]
+        # nn_bond_parameters_data[i][5] = nn_bond_properties["avg_Al-Al"]
+        # nn_bond_parameters_data[i][6] = nn_bond_properties["avg_Al-In"]
+        # nn_bond_parameters_data[i][7] = nn_bond_properties["avg_Al-O"]
+        #
+        # nn_bond_parameters_data[i][8] = nn_bond_properties["avg_In-Ga"]
+        # nn_bond_parameters_data[i][9] = nn_bond_properties["avg_In-Al"]
+        # nn_bond_parameters_data[i][10] = nn_bond_properties["avg_In-In"]
+        # nn_bond_parameters_data[i][11] = nn_bond_properties["avg_In-O"]
+        #
+        # nn_bond_parameters_data[i][12] = nn_bond_properties["avg_O-Ga"]
+        # nn_bond_parameters_data[i][13] = nn_bond_properties["avg_O-Al"]
+        # nn_bond_parameters_data[i][14] = nn_bond_properties["avg_O-In"]
+        # nn_bond_parameters_data[i][15] = nn_bond_properties["avg_O-O"]
+        #
+        #
+        # nn_bond_parameters_data[i][16] = nn_bond_properties["std_Ga-Ga"]
+        # nn_bond_parameters_data[i][17] = nn_bond_properties["std_Ga-Al"]
+        # nn_bond_parameters_data[i][18] = nn_bond_properties["std_Ga-In"]
+        # nn_bond_parameters_data[i][19] = nn_bond_properties["std_Ga-O"]
+        #
+        # nn_bond_parameters_data[i][20] = nn_bond_properties["std_Al-Ga"]
+        # nn_bond_parameters_data[i][21] = nn_bond_properties["std_Al-Al"]
+        # nn_bond_parameters_data[i][22] = nn_bond_properties["std_Al-In"]
+        # nn_bond_parameters_data[i][23] = nn_bond_properties["std_Al-O"]
+        #
+        # nn_bond_parameters_data[i][24] = nn_bond_properties["std_In-Ga"]
+        # nn_bond_parameters_data[i][25] = nn_bond_properties["std_In-Al"]
+        # nn_bond_parameters_data[i][26] = nn_bond_properties["std_In-In"]
+        # nn_bond_parameters_data[i][27] = nn_bond_properties["std_In-O"]
+        #
+        # nn_bond_parameters_data[i][28] = nn_bond_properties["std_O-Ga"]
+        # nn_bond_parameters_data[i][29] = nn_bond_properties["std_O-Al"]
+        # nn_bond_parameters_data[i][30] = nn_bond_properties["std_O-In"]
+        # nn_bond_parameters_data[i][31] = nn_bond_properties["std_O-O"]
+        #
+        #
+        # nn_bond_parameters_data[i][32] = nn_bond_properties["min_Ga-Ga"]
+        # nn_bond_parameters_data[i][33] = nn_bond_properties["min_Ga-Al"]
+        # nn_bond_parameters_data[i][34] = nn_bond_properties["min_Ga-In"]
+        # nn_bond_parameters_data[i][35] = nn_bond_properties["min_Ga-O"]
+        #
+        # nn_bond_parameters_data[i][36] = nn_bond_properties["min_Al-Ga"]
+        # nn_bond_parameters_data[i][37] = nn_bond_properties["min_Al-Al"]
+        # nn_bond_parameters_data[i][38] = nn_bond_properties["min_Al-In"]
+        # nn_bond_parameters_data[i][39] = nn_bond_properties["min_Al-O"]
+        #
+        # nn_bond_parameters_data[i][40] = nn_bond_properties["min_In-Ga"]
+        # nn_bond_parameters_data[i][41] = nn_bond_properties["min_In-Al"]
+        # nn_bond_parameters_data[i][42] = nn_bond_properties["min_In-In"]
+        # nn_bond_parameters_data[i][43] = nn_bond_properties["min_In-O"]
+        #
+        # nn_bond_parameters_data[i][44] = nn_bond_properties["min_O-Ga"]
+        # nn_bond_parameters_data[i][45] = nn_bond_properties["min_O-Al"]
+        # nn_bond_parameters_data[i][46] = nn_bond_properties["min_O-In"]
+        # nn_bond_parameters_data[i][47] = nn_bond_properties["min_O-O"]
+        #
+        #
+        # nn_bond_parameters_data[i][48] = nn_bond_properties["max_Ga-Ga"]
+        # nn_bond_parameters_data[i][49] = nn_bond_properties["max_Ga-Al"]
+        # nn_bond_parameters_data[i][50] = nn_bond_properties["max_Ga-In"]
+        # nn_bond_parameters_data[i][51] = nn_bond_properties["max_Ga-O"]
+        #
+        # nn_bond_parameters_data[i][52] = nn_bond_properties["max_Al-Ga"]
+        # nn_bond_parameters_data[i][53] = nn_bond_properties["max_Al-Al"]
+        # nn_bond_parameters_data[i][54] = nn_bond_properties["max_Al-In"]
+        # nn_bond_parameters_data[i][55] = nn_bond_properties["max_Al-O"]
+        #
+        # nn_bond_parameters_data[i][56] = nn_bond_properties["max_In-Ga"]
+        # nn_bond_parameters_data[i][57] = nn_bond_properties["max_In-Al"]
+        # nn_bond_parameters_data[i][58] = nn_bond_properties["max_In-In"]
+        # nn_bond_parameters_data[i][59] = nn_bond_properties["max_In-O"]
+        #
+        # nn_bond_parameters_data[i][60] = nn_bond_properties["max_O-Ga"]
+        # nn_bond_parameters_data[i][61] = nn_bond_properties["max_O-Al"]
+        # nn_bond_parameters_data[i][62] = nn_bond_properties["max_O-In"]
+        # nn_bond_parameters_data[i][63] = nn_bond_properties["max_O-O"]
 
         stop = time.time()
 
@@ -720,6 +1069,7 @@ if __name__ == "__main__":
     percentage_atom_data = np.hstack((ids, percentage_atom_data))
     unit_cell_data = np.hstack((ids, unit_cell_data))
     nn_bond_parameters_data = np.hstack((ids, nn_bond_parameters_data))
+    angles_and_rs_data = np.hstack((ids, angles_and_rs_data))
 
     logger.info("new_data.shape: " + str(new_data.shape))
     np.savetxt("train_mod.csv", new_data, delimiter=",")
@@ -728,3 +1078,4 @@ if __name__ == "__main__":
     np.savetxt("percentage_atom_data.csv", percentage_atom_data, delimiter=",")
     np.savetxt("unit_cell_data.csv", unit_cell_data, delimiter=",")
     np.savetxt("nn_bond_parameters_data.csv", nn_bond_parameters_data, delimiter=",")
+    np.savetxt("angles_and_rs_data.csv", angles_and_rs_data, delimiter=",")

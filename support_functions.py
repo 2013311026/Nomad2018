@@ -114,7 +114,7 @@ def cross_validate(x,
         indexes_to_remove = [j for j in range(start_index, end_index)]
 
         train_data = np.delete(x, indexes_to_remove, axis=0)
-        train_targets = np.delete(y, indexes_to_remove, axis=0).reshape((-1, 1))
+        train_targets = np.delete(y, indexes_to_remove, axis=0)
 
         logger.debug("train_data.shape: {0}".format(train_data.shape))
         logger.debug("train_targets.shape: {0}".format(train_targets.shape))

@@ -50,6 +50,33 @@ def plot_two_features(data, x_label, y_label):
     plt.ylabel(y_label)
     plt.show()
 
+
+def recombine_data_shuffle_and_split(ids, x, y_fe, y_bg):
+    """
+    Once x has been filled with additional features
+    we recombine the features with the labes and shuffle them.
+    Once they are shuffled we split them back to their
+    original form.
+
+    :param ids:
+    :param x:
+    :param y_fe:
+    :param y_bg:
+    :return:
+    """
+    data = np.hstack((ids, x, y_fe, y_bg))
+    np.random.shuffle(data)
+
+    _, m = data.shape
+
+    ids = data[:, 0]
+    x = data[:, 1:(m-2)]
+    y_fe = data[:, m-2].reshape((-1, 1))
+    y_bg = data[:, m-1].reshape((-1, 1))
+
+    return ids, x, y_fe, y_bg
+
+
 if __name__ == "__main__":
 
     data = np.loadtxt("train.csv", delimiter=",", skiprows=1)
@@ -81,10 +108,8 @@ if __name__ == "__main__":
     # y_fe = data[:, 12]
     # y_bg = data[:, 13]
 
-    ids = data[:, 0]
+    ids = data[:, 0].reshape((-1, 1))
     x = data[:, 1:(m-2)]
-
-    logger.info("space_groups: {0}".format(np.unique(data[:,1])))
 
     # Create additional non geometry features.
     # percent_atom_o = sf.get_percentage_of_o_atoms(data[:, labels["percent_atom_al"]],
@@ -103,45 +128,75 @@ if __name__ == "__main__":
     features = sys.argv[1]
 
     if features == "rho_data":
+        logger.info("Adding rho_data")
         x = np.hstack((x, rho_data[:, 1:]))
+
     elif features == "rho_percentage_atom_data":
+        logger.info("Adding rho_percentage_atom_data")
         x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:]))
-    elif features == "rho_percentage_atom_unit_cell_data_data":
+
+    elif features == "rho_percentage_atom_unit_cell_data":
+        logger.info("Adding rho_percentage_atom_unit_cell_data")
         x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:], unit_cell_data[:, 1:]))
-    elif features == "rho_percentage_atom_unit_cell_data_nn_bond_parameters_data":
+
+    elif features == "rho_percentage_atom_unit_cell_nn_bond_parameters_data":
+        logger.info("Adding rho_percentage_atom_unit_cell_nn_bond_parameters_data")
         x = np.hstack((x,
                        rho_data[:, 1:],
                        percentage_atom_data[:, 1:],
                        unit_cell_data[:, 1:],
                        nn_bond_parameters_data[:, 1:]))
-    elif features == "rho_percentage_atom_unit_cell_data_nn_bond_parameters_symmetries_data":
+
+    elif features == "rho_percentage_atom_unit_cell_nn_bond_parameters_symmetries_data":
+        logger.info("Adding rho_percentage_atom_unit_cell_nn_bond_parameters_symmetries_data")
         x = np.hstack((x,
                        rho_data[:, 1:],
                        percentage_atom_data[:, 1:],
                        unit_cell_data[:, 1:],
                        nn_bond_parameters_data[:, 1:],
                        symmetries_data[:, 1:]))
+
     elif features == "unit_cell_data":
+        logger.info("Adding unit_cell_data")
         x = np.hstack((x, unit_cell_data[:, 1:]))
+
     elif features == "unit_cell_nn_bond_parameters_data":
+        logger.info("Adding unit_cell_nn_bond_parameters_data")
         x = np.hstack((x, unit_cell_data[:, 1:], nn_bond_parameters_data[:, 1:]))
+
+    elif features == "unit_cell_nn_bond_parameters_symmetries_data":
+        logger.info("Adding unit_cell_nn_bond_parameters_symmetries_data")
+        x = np.hstack((x, unit_cell_data[:, 1:],
+                       nn_bond_parameters_data[:, 1:],
+                       symmetries_data[:, 1:]))
+
     elif features == "nn_bond_parameters_data":
+        logger.info("Adding nn_bond_parameters_data")
         x = np.hstack((x, nn_bond_parameters_data[:, 1:]))
+
     elif features == "nn_bond_parameters_symmetries_data":
+        logger.info("Adding nn_bond_parameters_symmetries_data")
         x = np.hstack((x, nn_bond_parameters_data[:, 1:], symmetries_data[:, 1:]))
+
     elif features == "standard":
         pass
     else:
-        pass
+        sys.exit("features parameter not valid!")
 
     y_fe = data[:, m-2].reshape((-1, 1))
     y_bg = data[:, m-1].reshape((-1, 1))
 
+    ids, x, y_fe, y_bg = recombine_data_shuffle_and_split(ids, x, y_fe, y_bg)
+
+
     _, n_features = x.shape
 
     logger.info("x: {0}".format(x.shape))
-    logger.debug("y_fe: {0}".format(y_fe.shape))
-    logger.debug("y_bg: {0}".format(y_bg.shape))
+    logger.info("y_fe: {0}".format(y_fe.shape))
+    logger.info("y_bg: {0}".format(y_bg.shape))
+
+    y = np.hstack((y_fe, y_bg))
+    logger.info("y: {0}".format(y.shape))
 
     gbrmodel_parameters = {"n_estimators": 100,
                            "learning_rate": 0.1,
@@ -150,12 +205,6 @@ if __name__ == "__main__":
                            "verbose": 0,
                            "max_features": "sqrt",
                            "n_features": n_features}
-
-    # sf.cross_validate(x,
-    #                   y_bg,
-    #                   GBRModel,
-    #                   model_parameters=gbrmodel_parameters,
-    #                   fraction=0.1)
 
     seed = int(random.randint(1, 2**16 - 1))
     colsample_bytree = random.random()
