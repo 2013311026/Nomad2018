@@ -10,6 +10,9 @@ import support_functions as sf
 from models import BaseModel
 from models import GBRModel
 from models import XGBRegressorModel
+from models import FeedForwardNeuralNetworkModel
+
+from keras import backend as K
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
@@ -85,12 +88,22 @@ if __name__ == "__main__":
     unit_cell_data = np.loadtxt("unit_cell_data.csv", delimiter=",", skiprows=0)
     nn_bond_parameters_data = np.loadtxt("nn_bond_parameters_data.csv", delimiter=",", skiprows=0)
     symmetries_data = np.loadtxt("symmetries_data.csv", delimiter=",", skiprows=0)
+    angles_and_rs_data = np.loadtxt("angles_and_rs_data.csv", delimiter=",", skiprows=0)
 
     logger.info("rho_data.shape: {0}".format(rho_data.shape))
     logger.info("percentage_atom_data.shape: {0}".format(percentage_atom_data.shape))
     logger.info("unit_cell_data.shape: {0}".format(unit_cell_data.shape))
     logger.info("nn_bond_parameters_data.shape: {0}".format(nn_bond_parameters_data.shape))
     logger.info("symmetries_data.shape: {0}".format(symmetries_data.shape))
+    logger.info("angles_and_rs_data.shape: {0}".format(angles_and_rs_data.shape))
+
+    test_data = np.loadtxt("test.csv", delimiter=",", skiprows=1)
+    test_rho_data = np.loadtxt("test_rho_data.csv", delimiter=",", skiprows=0)
+    test_percentage_atom_data = np.loadtxt("test_percentage_atom_data.csv", delimiter=",", skiprows=0)
+    test_unit_cell_data = np.loadtxt("test_unit_cell_data.csv", delimiter=",", skiprows=0)
+    test_nn_bond_parameters_data = np.loadtxt("test_nn_bond_parameters_data.csv", delimiter=",", skiprows=0)
+    test_symmetries_data = np.loadtxt("test_symmetries_data.csv", delimiter=",", skiprows=0)
+    test_angles_and_rs_data = np.loadtxt("test_angles_and_rs_data.csv", delimiter=",", skiprows=0)
 
     # for key, _ in labels.items():
     #     plot_two_features(data, key, "formation_energy_ev_natom")
@@ -110,6 +123,10 @@ if __name__ == "__main__":
 
     ids = data[:, 0].reshape((-1, 1))
     x = data[:, 1:(m-2)]
+
+    test_n, test_m = test_data.shape
+    test_ids = test_data[:, 0].reshape((-1, 1))
+    test_x = test_data[:, 1:]
 
     # Create additional non geometry features.
     # percent_atom_o = sf.get_percentage_of_o_atoms(data[:, labels["percent_atom_al"]],
@@ -131,13 +148,25 @@ if __name__ == "__main__":
         logger.info("Adding rho_data")
         x = np.hstack((x, rho_data[:, 1:]))
 
+        test_x = np.hstack((test_x, test_rho_data[:, 1:]))
+
     elif features == "rho_percentage_atom_data":
         logger.info("Adding rho_percentage_atom_data")
         x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:]))
 
+        test_x = np.hstack((test_x, test_rho_data[:, 1:], test_percentage_atom_data[:, 1:]))
+
     elif features == "rho_percentage_atom_unit_cell_data":
         logger.info("Adding rho_percentage_atom_unit_cell_data")
-        x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:], unit_cell_data[:, 1:]))
+        x = np.hstack((x,
+                       rho_data[:, 1:],
+                       percentage_atom_data[:, 1:],
+                       unit_cell_data[:, 1:]))
+
+        test_x = np.hstack((test_x,
+                            test_rho_data[:, 1:],
+                            test_percentage_atom_data[:, 1:],
+                            test_unit_cell_data[:, 1:]))
 
     elif features == "rho_percentage_atom_unit_cell_nn_bond_parameters_data":
         logger.info("Adding rho_percentage_atom_unit_cell_nn_bond_parameters_data")
@@ -146,6 +175,12 @@ if __name__ == "__main__":
                        percentage_atom_data[:, 1:],
                        unit_cell_data[:, 1:],
                        nn_bond_parameters_data[:, 1:]))
+
+        test_x = np.hstack((test_x,
+                            test_rho_data[:, 1:],
+                            test_percentage_atom_data[:, 1:],
+                            test_unit_cell_data[:, 1:],
+                            test_nn_bond_parameters_data[:, 1:]))
 
     elif features == "rho_percentage_atom_unit_cell_nn_bond_parameters_symmetries_data":
         logger.info("Adding rho_percentage_atom_unit_cell_nn_bond_parameters_symmetries_data")
@@ -156,13 +191,33 @@ if __name__ == "__main__":
                        nn_bond_parameters_data[:, 1:],
                        symmetries_data[:, 1:]))
 
+        test_x = np.hstack((test_x,
+                            test_rho_data[:, 1:],
+                            test_percentage_atom_data[:, 1:],
+                            test_unit_cell_data[:, 1:],
+                            test_nn_bond_parameters_data[:, 1:],
+                            test_symmetries_data[:, 1:]))
+
     elif features == "unit_cell_data":
         logger.info("Adding unit_cell_data")
         x = np.hstack((x, unit_cell_data[:, 1:]))
 
+        test_x = np.hstack((test_x, test_unit_cell_data[:, 1:]))
+
     elif features == "unit_cell_nn_bond_parameters_data":
         logger.info("Adding unit_cell_nn_bond_parameters_data")
         x = np.hstack((x, unit_cell_data[:, 1:], nn_bond_parameters_data[:, 1:]))
+
+        test_x = np.hstack((test_x, test_unit_cell_data[:, 1:], test_nn_bond_parameters_data[:, 1:]))
+
+    elif features == "unit_cell_nn_bond_parameters_angles_and_rs_data":
+        logger.info("Adding unit_cell_nn_bond_parameters_angles_and_rs_data")
+        x = np.hstack((x, unit_cell_data[:, 1:], nn_bond_parameters_data[:, 1:], angles_and_rs_data[:, 1:]))
+
+        test_x = np.hstack((test_x,
+                            test_unit_cell_data[:, 1:],
+                            test_nn_bond_parameters_data[:, 1:],
+                            test_angles_and_rs_data[:, 1:]))
 
     elif features == "unit_cell_nn_bond_parameters_symmetries_data":
         logger.info("Adding unit_cell_nn_bond_parameters_symmetries_data")
@@ -170,13 +225,28 @@ if __name__ == "__main__":
                        nn_bond_parameters_data[:, 1:],
                        symmetries_data[:, 1:]))
 
+        test_x = np.hstack((test_x,
+                            test_unit_cell_data[:, 1:],
+                            test_nn_bond_parameters_data[:, 1:],
+                            test_symmetries_data[:, 1:]))
+
     elif features == "nn_bond_parameters_data":
         logger.info("Adding nn_bond_parameters_data")
         x = np.hstack((x, nn_bond_parameters_data[:, 1:]))
 
+        test_x = np.hstack((test_x, test_nn_bond_parameters_data[:, 1:]))
+
+    elif features == "nn_bond_parameters_angles_and_rs_data":
+        logger.info("Adding nn_bond_parameters_angles_and_rs_data")
+        x = np.hstack((x, nn_bond_parameters_data[:, 1:], angles_and_rs_data[:, 1:]))
+
+        test_x = np.hstack((test_x, test_nn_bond_parameters_data[:, 1:], test_angles_and_rs_data[:, 1:]))
+
     elif features == "nn_bond_parameters_symmetries_data":
         logger.info("Adding nn_bond_parameters_symmetries_data")
         x = np.hstack((x, nn_bond_parameters_data[:, 1:], symmetries_data[:, 1:]))
+
+        test_x = np.hstack((test_x, test_nn_bond_parameters_data[:, 1:], test_symmetries_data[:, 1:]))
 
     elif features == "standard":
         pass
@@ -196,6 +266,10 @@ if __name__ == "__main__":
     logger.info("y_bg: {0}".format(y_bg.shape))
 
     y = np.hstack((y_fe, y_bg))
+    #y = y_bg
+
+    _, n_output = y.shape
+
     logger.info("y: {0}".format(y.shape))
 
     gbrmodel_parameters = {"n_estimators": 100,
@@ -206,83 +280,78 @@ if __name__ == "__main__":
                            "max_features": "sqrt",
                            "n_features": n_features}
 
-    seed = int(random.randint(1, 2**16 - 1))
-    colsample_bytree = random.random()
-    subsample = random.random()
-    xgb_regressor_model_parameters = {"max_depth": 4,
-                                      "learning_rate": 0.1,
-                                      "n_estimators": 300,
-                                      "silent": True,
-                                      "objective": 'reg:linear',
-                                      "booster": 'gbtree',
-                                      "n_jobs": 1,
-                                      "nthread": None,
-                                      "gamma": 0,
-                                      "min_child_weight": 5,
-                                      "max_delta_step": 0,
-                                      "subsample": subsample,
-                                      "colsample_bytree": colsample_bytree,
-                                      "colsample_bylevel": 1,
-                                      "reg_alpha": 0,
-                                      "reg_lambda": 1,
-                                      "scale_pos_weight": 1,
-                                      "base_score": 0.5,
-                                      "random_state": seed + 1,
-                                      "seed": seed,
-                                      "missing": None,
-                                      "n_features": n_features}
+    # seed = int(random.randint(1, 2**16 - 1))
+    # colsample_bytree = random.random()
+    # subsample = random.random()
+    # xgb_regressor_model_parameters = {"max_depth": 4,
+    #                                   "learning_rate": 0.1,
+    #                                   "n_estimators": 200,
+    #                                   "silent": True,
+    #                                   "objective": 'reg:linear',
+    #                                   "booster": 'gbtree',
+    #                                   "n_jobs": 1,
+    #                                   "nthread": None,
+    #                                   "gamma": 0,
+    #                                   "min_child_weight": 5,
+    #                                   "max_delta_step": 0,
+    #                                   "subsample": subsample,
+    #                                   "colsample_bytree": colsample_bytree,
+    #                                   "colsample_bylevel": 1,
+    #                                   "reg_alpha": 0,
+    #                                   "reg_lambda": 1,
+    #                                   "scale_pos_weight": 1,
+    #                                   "base_score": 0.5,
+    #                                   "random_state": seed + 1,
+    #                                   "seed": seed,
+    #                                   "missing": None,
+    #                                   "n_features": n_features}
+    #
+    #
+    # sf.cross_validate(x,
+    #                   y_bg,
+    #                   XGBRegressorModel,
+    #                   model_parameters=xgb_regressor_model_parameters,
+    #                   fraction=0.25)
 
+    nn_model_parameters = {"n_features": n_features,
+                           "n_hidden_layers": 2,
+                           "n_output": n_output,
+                           "layer_dim": 100,
+                           "dropout_rate": 0.9,
+                           "alpha": 0.01,
+                           "learning_rate": 0.01,
+                           "loss": "mean_squared_logarithmic_error"}
 
+    K.get_session()
     sf.cross_validate(x,
-                      y_bg,
-                      XGBRegressorModel,
-                      model_parameters=xgb_regressor_model_parameters,
+                      y,
+                      FeedForwardNeuralNetworkModel,
+                      model_parameters=nn_model_parameters,
                       fraction=0.25)
 
-    # print("ids.shape: " + str(ids.shape))
-    # print("x.shape: " + str(x.shape))
-    # print("y_fe.shape: " + str(y_fe.shape))
-    # print("y_bg.shape: " + str(y_bg.shape))
-    #
-    # _, n_features = x.shape
-    # #bm = BaseModel(n_features=n_features)
-    #
-    # # Band gap model
-    # bgm = GBRModel(n_features=n_features,
-    #                verbose=0)
-    #
-    # # Formation energy model
-    # fem = GBRModel(n_features=n_features,
-    #                verbose=0)
-    #
-    # fem.fit(x, y_fe)
-    # bgm.fit(x, y_bg)
-    # y_fe_pred = fem.predict(x)
-    # y_bg_pred = bgm.predict(x)
-    #
-    # print("y_fe_pred.shape: {0}".format(y_fe_pred.shape))
-    # print("y_bg_pred.shape: {0}".format(y_bg_pred.shape))
-    #
-    # rmsle_fe = fem.evaluate(x, y_fe)
-    # rmsle_bg = bgm.evaluate(x, y_bg)
-    #
-    # for i in range(20):
-    #     print()
-    #     print("y_fe: {0:.9f} y_fe_pred: {1:.9f}".format(y_fe[i], y_fe_pred[i][0]))
-    #     print("y_bg: {0:.9f} y_bg_pred: {1:.9f}".format(y_bg[i], y_bg_pred[i][0]))
-    #
-    # rmsle = np.mean(rmsle_bg + rmsle_fe)
-    # print("rmsle_fe: " + str(rmsle_fe))
-    # print("rmsle_bg: " + str(rmsle_bg))
-    #
-    # #sf.pipeline_flow(x, bm, "temp")
-    #
-    # test_data = np.loadtxt("test.csv", delimiter=",", skiprows=1)
-    # test_ids = test_data[:, 0]
-    # test_x = test_data[:, 1:12]
+    K.clear_session()
 
-    # sf.pipeline_flow(ids,
-    #                  test_x,
-    #                  fem,
-    #                  bgm,
-    #                  "temp")
+    sys.exit()
+
+    # Band gap model
+    bgm = XGBRegressorModel(**xgb_regressor_model_parameters)
+
+    # Formation energy model
+    fem = XGBRegressorModel(**xgb_regressor_model_parameters)
+    #
+    fem.fit(x, y_fe)
+    bgm.fit(x, y_bg)
+
+    rmsle_fe = fem.evaluate(x, y_fe)
+    rmsle_bg = bgm.evaluate(x, y_bg)
+
+    rmsle = np.mean(rmsle_bg + rmsle_fe)
+    print("rmsle_fe: " + str(rmsle_fe))
+    print("rmsle_bg: " + str(rmsle_bg))
+    print("rmsle: {0}".format(rmsle))
+
+    sf.pipeline_flow(test_ids,
+                     test_x,
+                     fem,
+                     bgm,
+                     "temp")

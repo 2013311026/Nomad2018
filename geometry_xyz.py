@@ -862,7 +862,9 @@ if __name__ == "__main__":
     # logger.info("uc_vol: " + str(uc_vol))
     # logger.info("Cluster r: " + str(r))
 
-    file_name = "train.csv"
+    data_type = "test"
+
+    file_name = data_type + ".csv"
     data = np.loadtxt(file_name, delimiter=",", skiprows=1)
     logger.info("data.shape: " + str(data.shape))
 
@@ -884,7 +886,7 @@ if __name__ == "__main__":
         logger.info("n: {0}, i: {1}".format(n, i))
         id = int(ids[i])
         new_features = extract_features(id=id,
-                                        data_type="train",
+                                        data_type=data_type,
                                         n_x=4,
                                         n_y=4,
                                         n_z=4,
@@ -1072,10 +1074,10 @@ if __name__ == "__main__":
     angles_and_rs_data = np.hstack((ids, angles_and_rs_data))
 
     logger.info("new_data.shape: " + str(new_data.shape))
-    np.savetxt("train_mod.csv", new_data, delimiter=",")
-
-    np.savetxt("rho_data.csv", rho_data, delimiter=",")
-    np.savetxt("percentage_atom_data.csv", percentage_atom_data, delimiter=",")
-    np.savetxt("unit_cell_data.csv", unit_cell_data, delimiter=",")
-    np.savetxt("nn_bond_parameters_data.csv", nn_bond_parameters_data, delimiter=",")
-    np.savetxt("angles_and_rs_data.csv", angles_and_rs_data, delimiter=",")
+    
+    np.savetxt(data_type + "train_mod.csv", new_data, delimiter=",")
+    np.savetxt(data_type + "_rho_data.csv", rho_data, delimiter=",")
+    np.savetxt(data_type + "_percentage_atom_data.csv", percentage_atom_data, delimiter=",")
+    np.savetxt(data_type + "_unit_cell_data.csv", unit_cell_data, delimiter=",")
+    np.savetxt(data_type + "_nn_bond_parameters_data.csv", nn_bond_parameters_data, delimiter=",")
+    np.savetxt(data_type + "_angles_and_rs_data.csv", angles_and_rs_data, delimiter=",")

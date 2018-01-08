@@ -3,9 +3,16 @@ import numpy as np
 import xgboost as xgb
 from sklearn.ensemble import GradientBoostingRegressor
 
+from keras.layers import Input, Dense, Dropout
+from keras.layers.advanced_activations import LeakyReLU
+from keras.models import Model
+from keras import optimizers
+from keras import callbacks
+
 
 import support_functions as sf
 import global_flags_constanst as gf
+
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
@@ -19,7 +26,8 @@ class BaseModel:
 
     def __init__(self,
                  model_name=None,
-                 n_features=None):
+                 n_features=None,
+                 validation_data=None):
 
         assert isinstance(n_features, int), "n_features must be an integer."
 
@@ -79,13 +87,13 @@ class BaseModel:
             rmsle = sf.root_mean_squared_logarithmic_error(y_true, y_pred)
         elif m == 2:
             y_pred = self.predict(x)
-            y_true = y_true.reshape((-1, 2))
+            y_true = y_true.reshape((-1, m))
 
-            y_pred_0 = y_pred[:, 0]
-            y_pred_1 = y_pred[:, 1]
+            y_pred_0 = y_pred[:, 0].reshape((-1, 1))
+            y_pred_1 = y_pred[:, 1].reshape((-1, 1))
 
-            y_true_0 = y_true[:, 0]
-            y_true_1 = y_true[:, 1]
+            y_true_0 = y_true[:, 0].reshape((-1, 1))
+            y_true_1 = y_true[:, 1].reshape((-1, 1))
 
             rmsle_0 = sf.root_mean_squared_logarithmic_error(y_true_0, y_pred_0)
             rmsle_1 = sf.root_mean_squared_logarithmic_error(y_true_1, y_pred_1)
@@ -105,7 +113,8 @@ class GBRModel(BaseModel):
                  random_state=1,
                  verbose=0,
                  n_features=None,
-                 max_features=None):
+                 max_features=None,
+                 validation_data=None):
         BaseModel.__init__(self, "GradientBoostingClassifierModel", n_features=n_features)
         self.model = GradientBoostingRegressor(n_estimators=n_estimators,
                                                learning_rate=learning_rate,
@@ -147,7 +156,8 @@ class XGBRegressorModel(BaseModel):
                  base_score=0.5,
                  random_state=0,
                  seed=None,
-                 missing=None):
+                 missing=None,
+                 validation_data=None):
 
         BaseModel.__init__(self, "XGBRegressor", n_features=n_features)
         self.model = xgb.XGBRegressor(max_depth=max_depth,
@@ -184,4 +194,71 @@ class XGBRegressorModel(BaseModel):
     def predict(self, x):
         y_pred = self.model.predict(x)
         y_pred = y_pred.reshape(-1, 1)
+        return y_pred
+
+
+class FeedForwardNeuralNetworkModel(BaseModel):
+
+    def __init__(self,
+                 n_features=10,
+                 n_hidden_layers=2,
+                 n_output=2,
+                 layer_dim=10,
+                 dropout_rate=0.9,
+                 alpha=0.1,
+                 learning_rate=0.1,
+                 loss="mean_squared_error",
+                 validation_data=None):
+
+        BaseModel.__init__(self, "FeedForwardNeuralNetwork", n_features=n_features)
+
+        self.n_features = n_features
+        self.n_hidden_layers = n_hidden_layers
+        self.n_output = n_output
+        self.layer_dim = layer_dim
+        self.dropout_rate = dropout_rate
+        self.alpha = alpha
+        self.learning_rate=learning_rate
+        self.loss = loss
+        self.validation_data = validation_data
+
+        self.input_features = Input(shape=(self.n_features,), name="autoencoder_input")
+
+        layer = Dense(layer_dim, activation="linear", name="encoder_first_layer")(self.input_features)
+        layer = LeakyReLU(alpha=alpha)(layer)
+        layer = Dropout(dropout_rate, name="encoder_first_layer_dropout")(layer)
+
+        for i in range(n_hidden_layers):
+            layer = Dense(layer_dim, activation="linear", name="encoder_hidden_layer_{0}".format(i))(layer)
+            layer = LeakyReLU(alpha=alpha)(layer)
+            layer = Dropout(dropout_rate, name="encoder_layer_dropout_{0}".format(i))(layer)
+
+        self.output = Dense(self.n_output, activation='softmax')(layer)
+        self.model = Model(self.input_features, self.output)
+
+        opt = optimizers.Adam(lr=self.learning_rate)
+        self.model.compile(optimizer=opt,
+                           loss=loss)
+
+        self.model.summary()
+
+    def fit(self, x, y):
+
+        if self.validation_data == None:
+            self.model.fit(x, y,
+                           epochs=100,
+                           batch_size=128,
+                           shuffle=True,
+                           verbose=1)
+        else:
+            self.model.fit(x, y,
+                           epochs=100,
+                           batch_size=256,
+                           shuffle=True,
+                           verbose=1,
+                           validation_data=self.validation_data)
+
+    def predict(self, x):
+
+        y_pred = self.model.predict(x)
         return y_pred

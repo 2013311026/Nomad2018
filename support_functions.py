@@ -79,6 +79,7 @@ def pipeline_flow(ids,
 
         f.write("id,formation_energy_ev_natom,bandgap_energy_ev\n")
         m, n = x.shape
+        logger.info("m: {0}; n: {1}".format(m, n))
         for i in range(m):
             id = int(ids[i])
             fe = formation_energy_model.predict(x[i, :].reshape(1, -1))
@@ -125,9 +126,16 @@ def cross_validate(x,
         logger.debug("valid_data.shape: {0}".format(valid_data.shape))
         logger.debug("valid_targets.shape: {0}".format(valid_targets.shape))
 
+        # Validation data within the model are used mainly
+        # for Keras base NN models.
+        model_parameters["validation_data"] = (valid_data, valid_targets)
         model = model_class(**model_parameters)
 
-        model.fit(train_data, train_targets.ravel())
+        _, train_m = train_targets.shape
+        if train_m == 1:
+            model.fit(train_data, train_targets.ravel())
+        else:
+            model.fit(train_data, train_targets)
 
         rmsle_train = model.evaluate(train_data, train_targets)
         rmsle_valid = model.evaluate(valid_data, valid_targets)
