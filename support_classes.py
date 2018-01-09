@@ -7,12 +7,14 @@ class Atom:
                  x=0.0,
                  y=0.0,
                  z=0.0,
-                 t=""):
+                 t="",
+                 c=0):
 
         self.x = x
         self.y = y
         self.z = z
         self.t = t
+        self.c = c
 
     def __eq__(self, other):
         if (abs(self.x - other.x) < Atom.ee and

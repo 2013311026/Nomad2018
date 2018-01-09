@@ -39,7 +39,7 @@ if __name__ == "__main__":
     test_symmetries_data = add_number_of_symmetries(test_space_group_feature)
 
     symmetries_data = np.hstack((ids, symmetries_data))
-    np.savetxt("symmetries_data.csv", symmetries_data, delimiter=",")
+    np.savetxt("train_symmetries_data.csv", symmetries_data, delimiter=",")
 
     test_symmetries_data = np.hstack((test_ids, test_symmetries_data))
     np.savetxt("test_symmetries_data.csv", test_symmetries_data, delimiter=",")

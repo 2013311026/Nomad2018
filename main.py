@@ -83,19 +83,20 @@ def recombine_data_shuffle_and_split(ids, x, y_fe, y_bg):
 if __name__ == "__main__":
 
     data = np.loadtxt("train.csv", delimiter=",", skiprows=1)
-    rho_data = np.loadtxt("rho_data.csv", delimiter=",", skiprows=0)
-    percentage_atom_data = np.loadtxt("percentage_atom_data.csv", delimiter=",", skiprows=0)
-    unit_cell_data = np.loadtxt("unit_cell_data.csv", delimiter=",", skiprows=0)
-    nn_bond_parameters_data = np.loadtxt("nn_bond_parameters_data.csv", delimiter=",", skiprows=0)
-    symmetries_data = np.loadtxt("symmetries_data.csv", delimiter=",", skiprows=0)
-    angles_and_rs_data = np.loadtxt("angles_and_rs_data.csv", delimiter=",", skiprows=0)
+    rho_data = np.loadtxt("train_rho_data.csv", delimiter=",", skiprows=0)
+    percentage_atom_data = np.loadtxt("train_percentage_atom_data.csv", delimiter=",", skiprows=0)
+    unit_cell_data = np.loadtxt("train_unit_cell_data.csv", delimiter=",", skiprows=0)
+    nn_bond_parameters_data = np.loadtxt("train_nn_bond_parameters_data.csv", delimiter=",", skiprows=0)
+    symmetries_data = np.loadtxt("train_symmetries_data.csv", delimiter=",", skiprows=0)
+    angles_and_rs_data = np.loadtxt("train_angles_and_rs_data.csv", delimiter=",", skiprows=0)
+    ewald_sum_data = np.loadtxt("train_ewald_sum_data.csv", delimiter=",", skiprows=0)
 
-    logger.info("rho_data.shape: {0}".format(rho_data.shape))
-    logger.info("percentage_atom_data.shape: {0}".format(percentage_atom_data.shape))
-    logger.info("unit_cell_data.shape: {0}".format(unit_cell_data.shape))
-    logger.info("nn_bond_parameters_data.shape: {0}".format(nn_bond_parameters_data.shape))
-    logger.info("symmetries_data.shape: {0}".format(symmetries_data.shape))
-    logger.info("angles_and_rs_data.shape: {0}".format(angles_and_rs_data.shape))
+    logger.info("train_rho_data.shape: {0}".format(rho_data.shape))
+    logger.info("train_percentage_atom_data.shape: {0}".format(percentage_atom_data.shape))
+    logger.info("train_unit_cell_data.shape: {0}".format(unit_cell_data.shape))
+    logger.info("train_nn_bond_parameters_data.shape: {0}".format(nn_bond_parameters_data.shape))
+    logger.info("train_symmetries_data.shape: {0}".format(symmetries_data.shape))
+    logger.info("train_angles_and_rs_data.shape: {0}".format(angles_and_rs_data.shape))
 
     test_data = np.loadtxt("test.csv", delimiter=",", skiprows=1)
     test_rho_data = np.loadtxt("test_rho_data.csv", delimiter=",", skiprows=0)
@@ -248,6 +249,22 @@ if __name__ == "__main__":
 
         test_x = np.hstack((test_x, test_nn_bond_parameters_data[:, 1:], test_symmetries_data[:, 1:]))
 
+    elif features == "ewald_sum_data":
+        logger.info("Adding ewald_sum_data")
+        x = ewald_sum_data
+
+    elif features == "unit_cell_nn_bond_parameters_symmetries_ewald_sum_data":
+        logger.info("Adding ewald_sum_data")
+        x = np.hstack((x, unit_cell_data[:, 1:],
+                       nn_bond_parameters_data[:, 1:],
+                       symmetries_data[:, 1:],
+                       ewald_sum_data[:, 1:]))
+
+        test_x = np.hstack((test_x,
+                            test_unit_cell_data[:, 1:],
+                            test_nn_bond_parameters_data[:, 1:],
+                            test_symmetries_data[:, 1:]))
+
     elif features == "standard":
         pass
     else:
@@ -280,56 +297,56 @@ if __name__ == "__main__":
                            "max_features": "sqrt",
                            "n_features": n_features}
 
-    # seed = int(random.randint(1, 2**16 - 1))
-    # colsample_bytree = random.random()
-    # subsample = random.random()
-    # xgb_regressor_model_parameters = {"max_depth": 4,
-    #                                   "learning_rate": 0.1,
-    #                                   "n_estimators": 200,
-    #                                   "silent": True,
-    #                                   "objective": 'reg:linear',
-    #                                   "booster": 'gbtree',
-    #                                   "n_jobs": 1,
-    #                                   "nthread": None,
-    #                                   "gamma": 0,
-    #                                   "min_child_weight": 5,
-    #                                   "max_delta_step": 0,
-    #                                   "subsample": subsample,
-    #                                   "colsample_bytree": colsample_bytree,
-    #                                   "colsample_bylevel": 1,
-    #                                   "reg_alpha": 0,
-    #                                   "reg_lambda": 1,
-    #                                   "scale_pos_weight": 1,
-    #                                   "base_score": 0.5,
-    #                                   "random_state": seed + 1,
-    #                                   "seed": seed,
-    #                                   "missing": None,
-    #                                   "n_features": n_features}
-    #
-    #
-    # sf.cross_validate(x,
-    #                   y_bg,
-    #                   XGBRegressorModel,
-    #                   model_parameters=xgb_regressor_model_parameters,
-    #                   fraction=0.25)
+    seed = int(random.randint(1, 2**16 - 1))
+    colsample_bytree = random.random()
+    subsample = random.random()
+    xgb_regressor_model_parameters = {"max_depth": 5,
+                                      "learning_rate": 0.1,
+                                      "n_estimators": 100,
+                                      "silent": True,
+                                      "objective": 'reg:linear',
+                                      "booster": 'gbtree',
+                                      "n_jobs": 1,
+                                      "nthread": None,
+                                      "gamma": 0.1,
+                                      "min_child_weight": 5,
+                                      "max_delta_step": 0,
+                                      "subsample": subsample,
+                                      "colsample_bytree": colsample_bytree,
+                                      "colsample_bylevel": 1,
+                                      "reg_alpha": 0,
+                                      "reg_lambda": 1,
+                                      "scale_pos_weight": 1,
+                                      "base_score": 0.5,
+                                      "random_state": seed + 1,
+                                      "seed": seed,
+                                      "missing": None,
+                                      "n_features": n_features}
 
-    nn_model_parameters = {"n_features": n_features,
-                           "n_hidden_layers": 2,
-                           "n_output": n_output,
-                           "layer_dim": 100,
-                           "dropout_rate": 0.9,
-                           "alpha": 0.01,
-                           "learning_rate": 0.01,
-                           "loss": "mean_squared_logarithmic_error"}
 
-    K.get_session()
     sf.cross_validate(x,
-                      y,
-                      FeedForwardNeuralNetworkModel,
-                      model_parameters=nn_model_parameters,
+                      y_bg,
+                      XGBRegressorModel,
+                      model_parameters=xgb_regressor_model_parameters,
                       fraction=0.25)
 
-    K.clear_session()
+    # nn_model_parameters = {"n_features": n_features,
+    #                        "n_hidden_layers": 2,
+    #                        "n_output": n_output,
+    #                        "layer_dim": 100,
+    #                        "dropout_rate": 0.9,
+    #                        "alpha": 0.01,
+    #                        "learning_rate": 0.01,
+    #                        "loss": "mean_squared_logarithmic_error"}
+    #
+    # K.get_session()
+    # sf.cross_validate(x,
+    #                   y,
+    #                   FeedForwardNeuralNetworkModel,
+    #                   model_parameters=nn_model_parameters,
+    #                   fraction=0.25)
+    #
+    # K.clear_session()
 
     sys.exit()
 

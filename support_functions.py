@@ -14,6 +14,17 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 logger.setLevel(gf.LOGGING_LEVEL)
 
+
+def split_data_into_id_x_y(data):
+
+    n, m = data.shape
+    ids = data[:, 0].reshape(-1, 1)
+    x = data[:, 1:(m-2)]
+    y_fe = data[:, m-2].reshape(-1, 1)
+    y_bg = data[:, m-1].reshape(-1, 1)
+
+    return ids, x, y_fe, y_bg
+
 def read_geometry_file(file_path):
 
     f = open(file_path, "r")

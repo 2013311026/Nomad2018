@@ -74,6 +74,8 @@ def build_angle_triangles():
     :return:
     """
 
+    logger.info("Building angle triangles")
+
     trangle_point_A = ["Ga", "Al", "In", "O"]
     trangle_point_B_C = [["Ga", "Al"],
                          ["Ga", "In"],
@@ -91,8 +93,9 @@ def build_angle_triangles():
             triangles.append(three_point)
 
     for k in range(len(triangles)):
-        logger.info(triangles[k])
+        logger.debug(triangles[k])
 
+    logger.info("Finished building angle triangles")
     return triangles
 
 
@@ -129,9 +132,18 @@ def read_geometry_file(path_to_file):
         z = float(sl[3])
         t = sl[4]
 
+        if sl[4] == "Ga":
+            c = ga_mass
+        elif sl[4] == "Al":
+            c = al_mass
+        elif sl[4] == "In":
+            c = in_mass
+        elif sl[4] == "O":
+            c = o_mass
+
         global_atom_types[t] = global_atom_types[t] + 1
 
-        a = Atom(x, y, z, t)
+        a = Atom(x, y, z, t, c)
         uc_atoms.append(a)
     logger.info("Geomtery file read.")
     # uc_atoms = UCAtoms(uc_atoms)
@@ -862,7 +874,7 @@ if __name__ == "__main__":
     # logger.info("uc_vol: " + str(uc_vol))
     # logger.info("Cluster r: " + str(r))
 
-    data_type = "test"
+    data_type = "train"
 
     file_name = data_type + ".csv"
     data = np.loadtxt(file_name, delimiter=",", skiprows=1)
@@ -880,7 +892,7 @@ if __name__ == "__main__":
     nn_bond_parameters_data = np.zeros((n, 64))
     angles_and_rs_data = np.zeros((n, 24*8))
 
-    for i in range(1, n):
+    for i in range(0, n):
         start = time.time()
         logger.info("===========================")
         logger.info("n: {0}, i: {1}".format(n, i))
