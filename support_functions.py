@@ -6,6 +6,8 @@ from matplotlib import cm
 
 import global_flags_constanst as gf
 from support_classes import Atom
+import global_flags_constanst as gfc
+
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
@@ -15,13 +17,20 @@ logger.addHandler(handler)
 logger.setLevel(gf.LOGGING_LEVEL)
 
 
-def split_data_into_id_x_y(data):
+def split_data_into_id_x_y(data, data_type="train"):
 
-    n, m = data.shape
-    ids = data[:, 0].reshape(-1, 1)
-    x = data[:, 1:(m-2)]
-    y_fe = data[:, m-2].reshape(-1, 1)
-    y_bg = data[:, m-1].reshape(-1, 1)
+    if data_type == "train":
+        n, m = data.shape
+        ids = data[:, 0].reshape(-1, 1)
+        x = data[:, 1:(m-2)]
+        y_fe = data[:, m-2].reshape(-1, 1)
+        y_bg = data[:, m-1].reshape(-1, 1)
+    else:
+        n, m = data.shape
+        ids = data[:, 0].reshape(-1, 1)
+        x = data[:, 1:]
+        y_fe = np.array([])
+        y_bg = np.array([])
 
     return ids, x, y_fe, y_bg
 
@@ -147,6 +156,16 @@ def cross_validate(x,
             model.fit(train_data, train_targets.ravel())
         else:
             model.fit(train_data, train_targets)
+
+        custom_data = np.hstack((valid_data, valid_targets))
+        condition = custom_data[:, gfc.LABELS["number_of_total_atoms"] - 1] == 80
+        custom_data = custom_data[condition]
+        custom_valid_data = custom_data[:, 0:-1]
+        custom_targets_data = custom_data[:, -1].reshape(-1, 1)
+        logger.info("custom_valid_data.shape: {0}".format(custom_valid_data.shape))
+        logger.info("custom_targets_data.shape: {0}".format(custom_targets_data.shape))
+        custom_rmsle_valid = model.evaluate(custom_valid_data, custom_targets_data)
+        logger.info("custom_rmsle_valid: {0}".format(custom_rmsle_valid))
 
         rmsle_train = model.evaluate(train_data, train_targets)
         rmsle_valid = model.evaluate(valid_data, valid_targets)

@@ -41,12 +41,21 @@ def convert_uc_atoms_to_input_for_pymatgen(uc_atoms):
     return atom_coords, atom_labels, site_properties
 
 
-def ewald_matrix_features(data, data_type="train"):
+def ewald_matrix_features(data,
+                          noa,
+                          data_type="train",
+                          file_name_type=""):
+
+    # noa - number of atoms in unit cell
 
     ids, x, y_fe, y_bg = split_data_into_id_x_y(data)
 
     n, m = ids.shape
-    ewald_sum_data = np.zeros((n, 4))
+    ewald_sum_data = np.zeros((n, 11))
+    ewald_sum_real_energy_matrix = np.zeros((n, noa*noa))
+    ewald_sum_reciprocal_energy_matrix = np.zeros((n, noa*noa))
+    ewald_sum_total_energy_matrix = np.zeros((n, noa*noa))
+    ewald_sum_point_energy_matrix = np.zeros((n, noa))
     for i in range(n):
         id = int(ids[i, 0])
         print("id: {0}".format(id))
@@ -88,16 +97,44 @@ def ewald_matrix_features(data, data_type="train"):
         logger.info("Point energy: {0}".format(ewald_sum.point_energy))
         logger.info("Total energy: {0}".format(ewald_sum.total_energy) )
 
-        ewald_sum_data[i][0] = ewald_sum.real_space_energy
-        ewald_sum_data[i][1] = ewald_sum.reciprocal_space_energy
-        ewald_sum_data[i][2] = ewald_sum.point_energy
-        ewald_sum_data[i][3] = ewald_sum.total_energy
+        ewald_sum_data[i][0] = ewald_sum.real_space_energy/len(uc_atoms)
+        ewald_sum_data[i][1] = ewald_sum.reciprocal_space_energy/len(uc_atoms)
+        ewald_sum_data[i][2] = ewald_sum.point_energy/len(uc_atoms)
+        ewald_sum_data[i][3] = ewald_sum.total_energy/len(uc_atoms)
+
+        ewald_sum_data[i][4] = np.trace(ewald_sum.real_space_energy_matrix)
+        ewald_sum_data[i][5] = np.trace(ewald_sum.reciprocal_space_energy_matrix)
+        ewald_sum_data[i][6] = np.trace(ewald_sum.total_energy_matrix)
+        ewald_sum_data[i][7] = np.sum(ewald_sum.point_energy_matrix)
+
+        ewald_sum_data[i][8] = np.trace(np.fliplr(ewald_sum.real_space_energy_matrix))
+        ewald_sum_data[i][9] = np.trace(np.fliplr(ewald_sum.reciprocal_space_energy_matrix))
+        ewald_sum_data[i][10] = np.trace(np.fliplr(ewald_sum.total_energy_matrix))
+
+        # ewald_sum_real_energy_matrix[i, :] = ewald_sum.real_space_energy_matrix.reshape(-1, 1)
+        # ewald_sum_reciprocal_energy_matrix[i, :] = ewald_sum.reciprocal_space_energy_matrix.reshape(-1, 1)
+        # ewald_sum_total_energy_matrix[i, :] = ewald_sum.total_energy_matrix.reshape(-1, 1)
+        # ewald_sum_point_energy_matrix[i, :] = ewald_sum.point_energy_matrix.reshape(-1, 1)
+
+        logger.info("real_space_energy_matrix trace: " + str(ewald_sum_data[i][4]))
+        logger.info("reciprocal_space_energy_matrix trace: " + str(ewald_sum_data[i][5]))
+        logger.info("total_energy_matrix trace: " + str(ewald_sum_data[i][6]))
+
 
     ewald_sum_data = np.hstack((ids, ewald_sum_data))
-    np.savetxt(data_type + "_ewald_sum_data.csv", ewald_sum_data, delimiter=",")
+    np.savetxt(file_name_type + "_ewald_sum_data.csv", ewald_sum_data, delimiter=",")
+    np.save(file_name_type + "_ewald_sum_data.npy", ewald_sum_data)
 
-data = np.loadtxt("train.csv", delimiter=",", skiprows=1)
-ewald_matrix_features(data, data_type="train")
+
+if __name__ == "__main__":
+
+    data = np.loadtxt("train.csv", delimiter=",", skiprows=1)
+
+
+    ewald_matrix_features(data,
+                          10,
+                          data_type="train",
+                          file_name_type="train")
 
 # id = 4
 # data = np.loadtxt("train.csv", delimiter=",", skiprows=1)

@@ -7,9 +7,14 @@ import os
 import glob
 import logging
 import numpy as np
+import pymatgen
+from pymatgen.analysis import ewald
 from support_classes import Atom
 from support_classes import UCAtoms
 import global_flags_constanst as gfc
+import matplotlib.pyplot as plt
+
+from support_functions import split_data_into_id_x_y
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
@@ -49,6 +54,13 @@ global_atom_types = {"Ga": 0,
                      "O": 0,
                      "Al": 0}
 
+
+def hist_data(data, text=""):
+
+    plt.figure()
+    plt.hist(data, bins=20)
+    plt.title(text)
+    plt.show()
 
 def build_angle_triangles():
 
@@ -763,7 +775,6 @@ def calculate_angles_of_nn_atoms(uc_atoms,
         angles_and_rs[max_r_str] = max_r_between_nn_bc
         angles_and_rs[min_r_str] = min_r_between_nn_bc
 
-
     for key, val in sorted(angles_and_rs.items()):
         logger.debug("angle or r: {0}, val: {1}".format(key, val))
 
@@ -804,7 +815,6 @@ def unit_cell_dimensions(vectors):
     c_star2 = c_star*c_star
 
     unit_cell_params = {}
-
     unit_cell_params["a"] = a
     unit_cell_params["a2"] = a2
     unit_cell_params["one_over_a"] = 1.0/a
@@ -851,46 +861,23 @@ def unit_cell_dimensions(vectors):
     return unit_cell_params
 
 
+def scan_through_geometry_files_and_extrac_features(data,
+                                                    data_type="train",
+                                                    file_name_type=""):
 
-if __name__ == "__main__":
-    # logger.info(os.getcwd())
-    #
-    # id = 1
-    # vectors, uc_atoms = read_geometry_file(os.getcwd() + "/train/" + str(id) + "/geometry.xyz")
-    # atoms = build_structure(vectors,
-    #                         uc_atoms,
-    #                         n_x=5,
-    #                         n_y=5,
-    #                         n_z=5)
-    # check_for_duplicates(atoms)
-    #
-    # r = 30
-    # atoms = cut_ball_from_structure(atoms, radious=r)
-    # atom_density = atom_density(atoms, radious=r)
-    #
-    # logger.info("Number of atoms: " + str(len(atoms)))
-    # logger.info("vectors: " + str(vectors))
-    # uc_vol = unite_cell_volume(vectors)
-    # logger.info("uc_vol: " + str(uc_vol))
-    # logger.info("Cluster r: " + str(r))
-
-    data_type = "train"
-
-    file_name = data_type + ".csv"
-    data = np.loadtxt(file_name, delimiter=",", skiprows=1)
     logger.info("data.shape: " + str(data.shape))
 
     n, m = data.shape
     ids = data[:, 0].reshape(-1, 1)
-    x = data[:, 1:(m-2)]
-    y_fe = data[:, m-2].reshape(-1, 1)
-    y_bg = data[:, m-1].reshape(-1, 1)
+    x = data[:, 1:(m - 2)]
+    y_fe = data[:, m - 2].reshape(-1, 1)
+    y_bg = data[:, m - 1].reshape(-1, 1)
 
     rho_data = np.zeros((n, 4))
     percentage_atom_data = np.zeros((n, 4))
     unit_cell_data = np.zeros((n, 36))
     nn_bond_parameters_data = np.zeros((n, 64))
-    angles_and_rs_data = np.zeros((n, 24*8))
+    angles_and_rs_data = np.zeros((n, 24 * 8))
 
     for i in range(0, n):
         start = time.time()
@@ -920,58 +907,23 @@ if __name__ == "__main__":
             angles_and_rs_data[i][index] = val
             index = index + 1
 
-        rho_data[i][0] = atom_density["rho_Ga"]
-        rho_data[i][1] = atom_density["rho_Al"]
-        rho_data[i][2] = atom_density["rho_In"]
-        rho_data[i][3] = atom_density["rho_O"]
+        index = 0
+        for key, val in sorted(atom_density.items(), key=lambda t: t[0]):
+            logger.info("Writing {0} to array, value {1}".format(key, val))
+            rho_data[i][index] = val
+            index = index + 1
 
-        percentage_atom_data[i][0] = percentage_of_atoms["percentage_of_ga"]
-        percentage_atom_data[i][1] = percentage_of_atoms["percentage_of_al"]
-        percentage_atom_data[i][2] = percentage_of_atoms["percentage_of_in"]
-        percentage_atom_data[i][3] = percentage_of_atoms["percentage_of_o"]
+        index = 0
+        for key, val in sorted(percentage_of_atoms.items(), key=lambda t: t[0]):
+            logger.info("Writing {0} to array, value {1}".format(key, val))
+            percentage_atom_data[i][index] = val
+            index = index + 1
 
-        unit_cell_data[i][0] = unit_cell_params["a"]
-        unit_cell_data[i][1] = unit_cell_params["a2"]
-        unit_cell_data[i][2] = unit_cell_params["one_over_a"]
-        unit_cell_data[i][3] = unit_cell_params["one_over_a2"]
-        unit_cell_data[i][4] = unit_cell_params["a_star"]
-        unit_cell_data[i][5] = unit_cell_params["a_star2"]
-        unit_cell_data[i][6] = unit_cell_params["one_over_a_star"]
-        unit_cell_data[i][7] = unit_cell_params["one_over_a_star2"]
-
-        unit_cell_data[i][8] = unit_cell_params["b"]
-        unit_cell_data[i][9] = unit_cell_params["b2"]
-        unit_cell_data[i][10] = unit_cell_params["one_over_b"]
-        unit_cell_data[i][11] = unit_cell_params["one_over_b2"]
-        unit_cell_data[i][12] = unit_cell_params["b_star"]
-        unit_cell_data[i][13] = unit_cell_params["b_star2"]
-        unit_cell_data[i][14] = unit_cell_params["one_over_b_star"]
-        unit_cell_data[i][15] = unit_cell_params["one_over_b_star2"]
-
-        unit_cell_data[i][16] = unit_cell_params["c"]
-        unit_cell_data[i][17] = unit_cell_params["c2"]
-        unit_cell_data[i][18] = unit_cell_params["one_over_c"]
-        unit_cell_data[i][19] = unit_cell_params["one_over_c2"]
-        unit_cell_data[i][20] = unit_cell_params["c_star"]
-        unit_cell_data[i][21] = unit_cell_params["c_star2"]
-        unit_cell_data[i][22] = unit_cell_params["one_over_c_star"]
-        unit_cell_data[i][23] = unit_cell_params["one_over_c_star2"]
-
-        unit_cell_data[i][24] = unit_cell_params["ga_radii_div_a"]
-        unit_cell_data[i][25] = unit_cell_params["ga_radii_div_b"]
-        unit_cell_data[i][26] = unit_cell_params["ga_radii_div_c"]
-
-        unit_cell_data[i][27] = unit_cell_params["al_radii_div_a"]
-        unit_cell_data[i][28] = unit_cell_params["al_radii_div_b"]
-        unit_cell_data[i][29] = unit_cell_params["al_radii_div_c"]
-
-        unit_cell_data[i][30] = unit_cell_params["in_radii_div_a"]
-        unit_cell_data[i][31] = unit_cell_params["in_radii_div_b"]
-        unit_cell_data[i][32] = unit_cell_params["in_radii_div_c"]
-
-        unit_cell_data[i][33] = unit_cell_params["o_radii_div_a"]
-        unit_cell_data[i][34] = unit_cell_params["o_radii_div_b"]
-        unit_cell_data[i][35] = unit_cell_params["o_radii_div_c"]
+        index = 0
+        for key, val in sorted(unit_cell_params.items(), key=lambda t: t[0]):
+            logger.info("Writing {0} to array, value {1}".format(key, val))
+            unit_cell_data[i][index] = val
+            index = index + 1
 
         index = 0
         # The dictionary needs to be sorted by keys so the features are
@@ -981,95 +933,11 @@ if __name__ == "__main__":
             nn_bond_parameters_data[i][index] = val
             index = index + 1
 
-        # nn_bond_parameters_data[i][0] = nn_bond_properties["avg_Ga-Ga"]
-        # nn_bond_parameters_data[i][1] = nn_bond_properties["avg_Ga-Al"]
-        # nn_bond_parameters_data[i][2] = nn_bond_properties["avg_Ga-In"]
-        # nn_bond_parameters_data[i][3] = nn_bond_properties["avg_Ga-O"]
-        #
-        # nn_bond_parameters_data[i][4] = nn_bond_properties["avg_Al-Ga"]
-        # nn_bond_parameters_data[i][5] = nn_bond_properties["avg_Al-Al"]
-        # nn_bond_parameters_data[i][6] = nn_bond_properties["avg_Al-In"]
-        # nn_bond_parameters_data[i][7] = nn_bond_properties["avg_Al-O"]
-        #
-        # nn_bond_parameters_data[i][8] = nn_bond_properties["avg_In-Ga"]
-        # nn_bond_parameters_data[i][9] = nn_bond_properties["avg_In-Al"]
-        # nn_bond_parameters_data[i][10] = nn_bond_properties["avg_In-In"]
-        # nn_bond_parameters_data[i][11] = nn_bond_properties["avg_In-O"]
-        #
-        # nn_bond_parameters_data[i][12] = nn_bond_properties["avg_O-Ga"]
-        # nn_bond_parameters_data[i][13] = nn_bond_properties["avg_O-Al"]
-        # nn_bond_parameters_data[i][14] = nn_bond_properties["avg_O-In"]
-        # nn_bond_parameters_data[i][15] = nn_bond_properties["avg_O-O"]
-        #
-        #
-        # nn_bond_parameters_data[i][16] = nn_bond_properties["std_Ga-Ga"]
-        # nn_bond_parameters_data[i][17] = nn_bond_properties["std_Ga-Al"]
-        # nn_bond_parameters_data[i][18] = nn_bond_properties["std_Ga-In"]
-        # nn_bond_parameters_data[i][19] = nn_bond_properties["std_Ga-O"]
-        #
-        # nn_bond_parameters_data[i][20] = nn_bond_properties["std_Al-Ga"]
-        # nn_bond_parameters_data[i][21] = nn_bond_properties["std_Al-Al"]
-        # nn_bond_parameters_data[i][22] = nn_bond_properties["std_Al-In"]
-        # nn_bond_parameters_data[i][23] = nn_bond_properties["std_Al-O"]
-        #
-        # nn_bond_parameters_data[i][24] = nn_bond_properties["std_In-Ga"]
-        # nn_bond_parameters_data[i][25] = nn_bond_properties["std_In-Al"]
-        # nn_bond_parameters_data[i][26] = nn_bond_properties["std_In-In"]
-        # nn_bond_parameters_data[i][27] = nn_bond_properties["std_In-O"]
-        #
-        # nn_bond_parameters_data[i][28] = nn_bond_properties["std_O-Ga"]
-        # nn_bond_parameters_data[i][29] = nn_bond_properties["std_O-Al"]
-        # nn_bond_parameters_data[i][30] = nn_bond_properties["std_O-In"]
-        # nn_bond_parameters_data[i][31] = nn_bond_properties["std_O-O"]
-        #
-        #
-        # nn_bond_parameters_data[i][32] = nn_bond_properties["min_Ga-Ga"]
-        # nn_bond_parameters_data[i][33] = nn_bond_properties["min_Ga-Al"]
-        # nn_bond_parameters_data[i][34] = nn_bond_properties["min_Ga-In"]
-        # nn_bond_parameters_data[i][35] = nn_bond_properties["min_Ga-O"]
-        #
-        # nn_bond_parameters_data[i][36] = nn_bond_properties["min_Al-Ga"]
-        # nn_bond_parameters_data[i][37] = nn_bond_properties["min_Al-Al"]
-        # nn_bond_parameters_data[i][38] = nn_bond_properties["min_Al-In"]
-        # nn_bond_parameters_data[i][39] = nn_bond_properties["min_Al-O"]
-        #
-        # nn_bond_parameters_data[i][40] = nn_bond_properties["min_In-Ga"]
-        # nn_bond_parameters_data[i][41] = nn_bond_properties["min_In-Al"]
-        # nn_bond_parameters_data[i][42] = nn_bond_properties["min_In-In"]
-        # nn_bond_parameters_data[i][43] = nn_bond_properties["min_In-O"]
-        #
-        # nn_bond_parameters_data[i][44] = nn_bond_properties["min_O-Ga"]
-        # nn_bond_parameters_data[i][45] = nn_bond_properties["min_O-Al"]
-        # nn_bond_parameters_data[i][46] = nn_bond_properties["min_O-In"]
-        # nn_bond_parameters_data[i][47] = nn_bond_properties["min_O-O"]
-        #
-        #
-        # nn_bond_parameters_data[i][48] = nn_bond_properties["max_Ga-Ga"]
-        # nn_bond_parameters_data[i][49] = nn_bond_properties["max_Ga-Al"]
-        # nn_bond_parameters_data[i][50] = nn_bond_properties["max_Ga-In"]
-        # nn_bond_parameters_data[i][51] = nn_bond_properties["max_Ga-O"]
-        #
-        # nn_bond_parameters_data[i][52] = nn_bond_properties["max_Al-Ga"]
-        # nn_bond_parameters_data[i][53] = nn_bond_properties["max_Al-Al"]
-        # nn_bond_parameters_data[i][54] = nn_bond_properties["max_Al-In"]
-        # nn_bond_parameters_data[i][55] = nn_bond_properties["max_Al-O"]
-        #
-        # nn_bond_parameters_data[i][56] = nn_bond_properties["max_In-Ga"]
-        # nn_bond_parameters_data[i][57] = nn_bond_properties["max_In-Al"]
-        # nn_bond_parameters_data[i][58] = nn_bond_properties["max_In-In"]
-        # nn_bond_parameters_data[i][59] = nn_bond_properties["max_In-O"]
-        #
-        # nn_bond_parameters_data[i][60] = nn_bond_properties["max_O-Ga"]
-        # nn_bond_parameters_data[i][61] = nn_bond_properties["max_O-Al"]
-        # nn_bond_parameters_data[i][62] = nn_bond_properties["max_O-In"]
-        # nn_bond_parameters_data[i][63] = nn_bond_properties["max_O-O"]
-
         stop = time.time()
-
         logger.info("rho_Ga: {0:.9f}, rho_Al: {1:.9f}, rho_In: {2:.9f}, rho_O: {3:.9f}".format(atom_density["rho_Ga"],
-                                                                                         atom_density["rho_Al"],
-                                                                                         atom_density["rho_In"],
-                                                                                         atom_density["rho_O"]))
+                                                                                               atom_density["rho_Al"],
+                                                                                               atom_density["rho_In"],
+                                                                                               atom_density["rho_O"]))
         logger.info("time: " + str(stop - start))
 
     logger.info(ids.shape)
@@ -1086,10 +954,227 @@ if __name__ == "__main__":
     angles_and_rs_data = np.hstack((ids, angles_and_rs_data))
 
     logger.info("new_data.shape: " + str(new_data.shape))
-    
-    np.savetxt(data_type + "train_mod.csv", new_data, delimiter=",")
-    np.savetxt(data_type + "_rho_data.csv", rho_data, delimiter=",")
-    np.savetxt(data_type + "_percentage_atom_data.csv", percentage_atom_data, delimiter=",")
-    np.savetxt(data_type + "_unit_cell_data.csv", unit_cell_data, delimiter=",")
-    np.savetxt(data_type + "_nn_bond_parameters_data.csv", nn_bond_parameters_data, delimiter=",")
-    np.savetxt(data_type + "_angles_and_rs_data.csv", angles_and_rs_data, delimiter=",")
+
+    np.savetxt(file_name_type + "train_mod.csv", new_data, delimiter=",")
+    np.savetxt(file_name_type + "_rho_data.csv", rho_data, delimiter=",")
+    np.savetxt(file_name_type + "_percentage_atom_data.csv", percentage_atom_data, delimiter=",")
+    np.savetxt(file_name_type + "_unit_cell_data.csv", unit_cell_data, delimiter=",")
+    np.savetxt(file_name_type + "_nn_bond_parameters_data.csv", nn_bond_parameters_data, delimiter=",")
+    np.savetxt(file_name_type + "_angles_and_rs_data.csv", angles_and_rs_data, delimiter=",")
+
+    np.save(file_name_type + "train_mod.npy", new_data)
+    np.save(file_name_type + "_rho_data.npy", rho_data)
+    np.save(file_name_type + "_percentage_atom_data.npy", percentage_atom_data)
+    np.save(file_name_type + "_unit_cell_data.npy", unit_cell_data)
+    np.save(file_name_type + "_nn_bond_parameters_data.npy", nn_bond_parameters_data)
+    np.save(file_name_type + "_angles_and_rs_data.npy", angles_and_rs_data)
+
+
+def convert_uc_atoms_to_input_for_pymatgen(uc_atoms):
+
+    n = len(uc_atoms)
+    atom_coords = []
+    atom_labels = []
+    charge_list = []
+    for i in range(n):
+        x = uc_atoms[i].x
+        y = uc_atoms[i].y
+        z = uc_atoms[i].z
+        t = uc_atoms[i].t
+        c = uc_atoms[i].c
+
+        vec = [x, y, z]
+
+        atom_coords.append(vec)
+        atom_labels.append(t)
+        charge_list.append(c)
+    site_properties = {"charge": charge_list}
+
+    return atom_coords, atom_labels, site_properties
+
+
+def ewald_matrix_features(data,
+                          noa,
+                          data_type="train",
+                          file_name_type=""):
+
+    # noa - number of atoms in unit cell
+
+    ids, x, y_fe, y_bg = split_data_into_id_x_y(data)
+
+    n, m = ids.shape
+    ewald_sum_data = np.zeros((n, 11))
+
+    if noa != -1:
+        ewald_sum_real_energy_matrix = np.zeros((n, noa*noa))
+        ewald_sum_reciprocal_energy_matrix = np.zeros((n, noa*noa))
+        ewald_sum_total_energy_matrix = np.zeros((n, noa*noa))
+        ewald_sum_point_energy_matrix = np.zeros((n, noa))
+
+    for i in range(n):
+        id = int(ids[i, 0])
+        print("id: {0}".format(id))
+
+        vectors, uc_atoms = read_geometry_file(data_type + "/" + str(id) + "/geometry.xyz")
+        atom_coords, atom_labels, site_properties = convert_uc_atoms_to_input_for_pymatgen(uc_atoms)
+
+        lv1 = x[id - 1, 5]
+        lv2 = x[id - 1, 6]
+        lv3 = x[id - 1, 7]
+
+        lv1_c = vector_length(vectors[0])
+        lv2_c = vector_length(vectors[1])
+        lv3_c = vector_length(vectors[2])
+
+        alpha = x[id - 1, 8]
+        beta = x[id - 1, 9]
+        gamma = x[id - 1, 10]
+
+        logger.info("lv1: {0}, lv2: {1}, lv3: {2}".format(lv1, lv2, lv3))
+        logger.info("lv1: {0}, lv2: {1}, lv3: {2}".format(lv1_c, lv2_c, lv3_c))
+        logger.info("alpha: {0}, beta: {1}, gamma: {2}".format(alpha, beta, gamma))
+
+        lattice = pymatgen.Lattice.from_parameters(a=lv1,
+                                                   b=lv2,
+                                                   c=lv3,
+                                                   alpha=alpha,
+                                                   beta=beta,
+                                                   gamma=gamma)
+
+        structure = pymatgen.Structure(lattice, atom_labels, atom_coords, site_properties=site_properties)
+
+        ewald_sum = ewald.EwaldSummation(structure)
+
+        logger.info("ewald_sum: \n{0}".format(ewald_sum))
+
+        logger.info("Real space energy: {0}".format(ewald_sum.real_space_energy))
+        logger.info("Reciprocal energy: {0}".format(ewald_sum.reciprocal_space_energy))
+        logger.info("Point energy: {0}".format(ewald_sum.point_energy))
+        logger.info("Total energy: {0}".format(ewald_sum.total_energy) )
+
+        ewald_sum_data[i][0] = ewald_sum.real_space_energy/len(uc_atoms)
+        ewald_sum_data[i][1] = ewald_sum.reciprocal_space_energy/len(uc_atoms)
+        ewald_sum_data[i][2] = ewald_sum.point_energy/len(uc_atoms)
+        ewald_sum_data[i][3] = ewald_sum.total_energy/len(uc_atoms)
+
+        ewald_sum_data[i][4] = np.trace(ewald_sum.real_space_energy_matrix)
+        ewald_sum_data[i][5] = np.trace(ewald_sum.reciprocal_space_energy_matrix)
+        ewald_sum_data[i][6] = np.trace(ewald_sum.total_energy_matrix)
+        ewald_sum_data[i][7] = np.sum(ewald_sum.point_energy_matrix)
+
+        ewald_sum_data[i][8] = np.trace(np.fliplr(ewald_sum.real_space_energy_matrix))
+        ewald_sum_data[i][9] = np.trace(np.fliplr(ewald_sum.reciprocal_space_energy_matrix))
+        ewald_sum_data[i][10] = np.trace(np.fliplr(ewald_sum.total_energy_matrix))
+
+        if noa != -1:
+            ewald_sum_real_energy_matrix[i, :] = ewald_sum.real_space_energy_matrix.reshape(-1, 1)
+            ewald_sum_reciprocal_energy_matrix[i, :] = ewald_sum.reciprocal_space_energy_matrix.reshape(-1, 1)
+            ewald_sum_total_energy_matrix[i, :] = ewald_sum.total_energy_matrix.reshape(-1, 1)
+            ewald_sum_point_energy_matrix[i, :] = ewald_sum.point_energy_matrix.reshape(-1, 1)
+
+        logger.info("real_space_energy_matrix trace: " + str(ewald_sum_data[i][4]))
+        logger.info("reciprocal_space_energy_matrix trace: " + str(ewald_sum_data[i][5]))
+        logger.info("total_energy_matrix trace: " + str(ewald_sum_data[i][6]))
+
+    ewald_sum_data = np.hstack((ids, ewald_sum_data))
+    np.savetxt(file_name_type + "_ewald_sum_data.csv", ewald_sum_data, delimiter=",")
+    np.save(file_name_type + "_ewald_sum_data.npy", ewald_sum_data)
+
+    if noa != -1:
+        np.save(file_name_type + "_ewald_sum_real_energy_matrix.npy", ewald_sum_real_energy_matrix)
+        np.save(file_name_type + "_ewald_sum_reciprocal_energy_matrix.npy", ewald_sum_reciprocal_energy_matrix)
+        np.save(file_name_type + "_ewald_sum_total_energy_matrix.npy", ewald_sum_total_energy_matrix)
+        np.save(file_name_type + "_ewald_sum_point_energy_matrix.npy", ewald_sum_point_energy_matrix)
+
+
+if __name__ == "__main__":
+    # logger.info(os.getcwd())
+    #
+    # id = 1
+    # vectors, uc_atoms = read_geometry_file(os.getcwd() + "/train/" + str(id) + "/geometry.xyz")
+    # atoms = build_structure(vectors,
+    #                         uc_atoms,
+    #                         n_x=5,
+    #                         n_y=5,
+    #                         n_z=5)
+    # check_for_duplicates(atoms)
+    #
+    # r = 30
+    # atoms = cut_ball_from_structure(atoms, radious=r)
+    # atom_density = atom_density(atoms, radious=r)
+    #
+    # logger.info("Number of atoms: " + str(len(atoms)))
+    # logger.info("vectors: " + str(vectors))
+    # uc_vol = unite_cell_volume(vectors)
+    # logger.info("uc_vol: " + str(uc_vol))
+    # logger.info("Cluster r: " + str(r))
+
+    data_type = "train"
+    file_name = "train.csv"
+    train_data = np.loadtxt(file_name, delimiter=",", skiprows=1)
+
+    file_name = "test.csv"
+    test_data = np.loadtxt(file_name, delimiter=",", skiprows=1)
+
+    train_total_number_of_atoms = np.unique(train_data[:, gfc.LABELS["number_of_total_atoms"]])
+    test_total_number_of_atoms = np.unique(test_data[:, gfc.LABELS["number_of_total_atoms"]])
+
+    logger.info("train_total_number_of_atoms: {0}".format(train_total_number_of_atoms))
+    logger.info("test_total_number_of_atoms: {0}".format(test_total_number_of_atoms))
+
+    assert_error_text = "The train and test data have examples with " + \
+                        "a different amount of atoms! You won't be able " + \
+                        "to make predictions!"
+
+    assert np.array_equal(train_total_number_of_atoms, test_total_number_of_atoms), assert_error_text
+
+
+    scan_through_geometry_files_and_extrac_features(train_data, data_type="train", file_name_type="train_")
+    ewald_matrix_features(train_data, -1, data_type="train", file_name_type="train_")
+
+    scan_through_geometry_files_and_extrac_features(test_data, data_type="test", file_name_type="test_")
+    ewald_matrix_features(test_data, -1, data_type="test", file_name_type="test_")
+
+    #
+    # for i in range(len(train_total_number_of_atoms)):
+    #
+    #     noa = train_total_number_of_atoms[i]
+    #
+    #     # ------------------
+    #     # --- Train data ---
+    #     # ------------------
+    #
+    #     condition = train_data[:, gfc.LABELS["number_of_total_atoms"]] == noa
+    #     conditioned_data = train_data[ condition ]
+    #     logger.info("number of atoms {0}; data.shape: {1}".format(noa, conditioned_data.shape))
+    #
+    #     # hist_data(data[:, -1], text=str(noa))
+    #     file_name_type = "train_" + str(int(noa)) + "_"
+    #     local_data_type = "train"
+    #     scan_through_geometry_files_and_extrac_features(conditioned_data,
+    #                                                     data_type=local_data_type,
+    #                                                     file_name_type=file_name_type)
+    #
+    #     ewald_matrix_features(conditioned_data,
+    #                           noa,
+    #                           data_type=local_data_type,
+    #                           file_name_type=file_name_type)
+    #
+    #     # -----------------
+    #     # --- Test data ---
+    #     # -----------------
+    #
+    #     condition = test_data[:, gfc.LABELS["number_of_total_atoms"]] == noa
+    #     conditioned_data = test_data[ condition ]
+    #     logger.info("number of atoms {0}; data.shape: {1}".format(noa, conditioned_data.shape))
+    #
+    #     file_name_type = "test_" + str(int(noa)) + "_"
+    #     local_data_type = "test"
+    #     scan_through_geometry_files_and_extrac_features(conditioned_data,
+    #                                                     data_type = "test",
+    #                                                     file_name_type="test_" + str(int(noa)) + "_")
+    #
+    #     ewald_matrix_features(conditioned_data,
+    #                           noa,
+    #                           data_type=local_data_type,
+    #                           file_name_type=file_name_type)
