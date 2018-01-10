@@ -26,7 +26,6 @@ def split_data_into_id_x_y(data, data_type="train"):
         y_fe = data[:, m-2].reshape(-1, 1)
         y_bg = data[:, m-1].reshape(-1, 1)
     else:
-        n, m = data.shape
         ids = data[:, 0].reshape(-1, 1)
         x = data[:, 1:]
         y_fe = np.array([])

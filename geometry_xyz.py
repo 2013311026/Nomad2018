@@ -940,11 +940,11 @@ def scan_through_geometry_files_and_extrac_features(data,
                                                                                                atom_density["rho_O"]))
         logger.info("time: " + str(stop - start))
 
-    logger.info(ids.shape)
-    logger.info(x.shape)
-    logger.info(rho_data.shape)
-    logger.info(y_fe.shape)
-    logger.info(y_bg.shape)
+    logger.info("ids.shape: " +str(ids.shape))
+    logger.info("x.shape: " + str(x.shape))
+    logger.info("rho_data.shape: " + str(rho_data.shape))
+    logger.info("y_fe.shape: " + str(y_fe.shape))
+    logger.info("y_bg.shape: " + str(y_bg.shape))
 
     new_data = np.hstack((ids, x, rho_data, y_fe, y_bg))
     rho_data = np.hstack((ids, rho_data))
@@ -999,8 +999,12 @@ def ewald_matrix_features(data,
                           file_name_type=""):
 
     # noa - number of atoms in unit cell
+    logger.info("Extracting Ewald matrix features. data_type {0}".format(data_type))
 
-    ids, x, y_fe, y_bg = split_data_into_id_x_y(data)
+    logger.info("data.shape: " + str(data.shape))
+    ids, x, y_fe, y_bg = split_data_into_id_x_y(data, data_type=data_type)
+
+    logger.info("x.shape: " + str(x.shape))
 
     n, m = ids.shape
     ewald_sum_data = np.zeros((n, 11))
@@ -1018,17 +1022,17 @@ def ewald_matrix_features(data,
         vectors, uc_atoms = read_geometry_file(data_type + "/" + str(id) + "/geometry.xyz")
         atom_coords, atom_labels, site_properties = convert_uc_atoms_to_input_for_pymatgen(uc_atoms)
 
-        lv1 = x[id - 1, 5]
-        lv2 = x[id - 1, 6]
-        lv3 = x[id - 1, 7]
+        lv1 = x[i, 5]
+        lv2 = x[i, 6]
+        lv3 = x[i, 7]
 
         lv1_c = vector_length(vectors[0])
         lv2_c = vector_length(vectors[1])
         lv3_c = vector_length(vectors[2])
 
-        alpha = x[id - 1, 8]
-        beta = x[id - 1, 9]
-        gamma = x[id - 1, 10]
+        alpha = x[i, 8]
+        beta = x[i, 9]
+        gamma = x[i, 10]
 
         logger.info("lv1: {0}, lv2: {1}, lv3: {2}".format(lv1, lv2, lv3))
         logger.info("lv1: {0}, lv2: {1}, lv3: {2}".format(lv1_c, lv2_c, lv3_c))
@@ -1067,10 +1071,10 @@ def ewald_matrix_features(data,
         ewald_sum_data[i][10] = np.trace(np.fliplr(ewald_sum.total_energy_matrix))
 
         if noa != -1:
-            ewald_sum_real_energy_matrix[i, :] = ewald_sum.real_space_energy_matrix.reshape(-1, 1)
-            ewald_sum_reciprocal_energy_matrix[i, :] = ewald_sum.reciprocal_space_energy_matrix.reshape(-1, 1)
-            ewald_sum_total_energy_matrix[i, :] = ewald_sum.total_energy_matrix.reshape(-1, 1)
-            ewald_sum_point_energy_matrix[i, :] = ewald_sum.point_energy_matrix.reshape(-1, 1)
+            ewald_sum_real_energy_matrix[i, :] = ewald_sum.real_space_energy_matrix.reshape(-1, )
+            ewald_sum_reciprocal_energy_matrix[i, :] = ewald_sum.reciprocal_space_energy_matrix.reshape(-1, )
+            ewald_sum_total_energy_matrix[i, :] = ewald_sum.total_energy_matrix.reshape(-1, )
+            ewald_sum_point_energy_matrix[i, :] = ewald_sum.point_energy_matrix.reshape(-1, )
 
         logger.info("real_space_energy_matrix trace: " + str(ewald_sum_data[i][4]))
         logger.info("reciprocal_space_energy_matrix trace: " + str(ewald_sum_data[i][5]))
@@ -1129,52 +1133,52 @@ if __name__ == "__main__":
     assert np.array_equal(train_total_number_of_atoms, test_total_number_of_atoms), assert_error_text
 
 
-    scan_through_geometry_files_and_extrac_features(train_data, data_type="train", file_name_type="train_")
-    ewald_matrix_features(train_data, -1, data_type="train", file_name_type="train_")
+    # scan_through_geometry_files_and_extrac_features(train_data, data_type="train", file_name_type="train_")
+    # ewald_matrix_features(train_data, -1, data_type="train", file_name_type="train_")
+    #
+    # scan_through_geometry_files_and_extrac_features(test_data, data_type="test", file_name_type="test_")
+    # ewald_matrix_features(test_data, -1, data_type="test", file_name_type="test_")
 
-    scan_through_geometry_files_and_extrac_features(test_data, data_type="test", file_name_type="test_")
-    ewald_matrix_features(test_data, -1, data_type="test", file_name_type="test_")
 
-    #
-    # for i in range(len(train_total_number_of_atoms)):
-    #
-    #     noa = train_total_number_of_atoms[i]
-    #
-    #     # ------------------
-    #     # --- Train data ---
-    #     # ------------------
-    #
-    #     condition = train_data[:, gfc.LABELS["number_of_total_atoms"]] == noa
-    #     conditioned_data = train_data[ condition ]
-    #     logger.info("number of atoms {0}; data.shape: {1}".format(noa, conditioned_data.shape))
-    #
-    #     # hist_data(data[:, -1], text=str(noa))
-    #     file_name_type = "train_" + str(int(noa)) + "_"
-    #     local_data_type = "train"
-    #     scan_through_geometry_files_and_extrac_features(conditioned_data,
-    #                                                     data_type=local_data_type,
-    #                                                     file_name_type=file_name_type)
-    #
-    #     ewald_matrix_features(conditioned_data,
-    #                           noa,
-    #                           data_type=local_data_type,
-    #                           file_name_type=file_name_type)
-    #
-    #     # -----------------
-    #     # --- Test data ---
-    #     # -----------------
-    #
-    #     condition = test_data[:, gfc.LABELS["number_of_total_atoms"]] == noa
-    #     conditioned_data = test_data[ condition ]
-    #     logger.info("number of atoms {0}; data.shape: {1}".format(noa, conditioned_data.shape))
-    #
-    #     file_name_type = "test_" + str(int(noa)) + "_"
-    #     local_data_type = "test"
-    #     scan_through_geometry_files_and_extrac_features(conditioned_data,
-    #                                                     data_type = "test",
-    #                                                     file_name_type="test_" + str(int(noa)) + "_")
-    #
-    #     ewald_matrix_features(conditioned_data,
-    #                           noa,
-    #                           data_type=local_data_type,
-    #                           file_name_type=file_name_type)
+    for i in range(len(train_total_number_of_atoms)):
+
+        noa = int(train_total_number_of_atoms[i])
+
+        # ------------------
+        # --- Train data ---
+        # ------------------
+
+        condition = train_data[:, gfc.LABELS["number_of_total_atoms"]] == noa
+        conditioned_data = train_data[ condition ]
+        logger.info("number of atoms {0}; data.shape: {1}".format(noa, conditioned_data.shape))
+
+        # hist_data(data[:, -1], text=str(noa))
+        file_name_type = "train_" + str(noa) + "_"
+        local_data_type = "train"
+        scan_through_geometry_files_and_extrac_features(conditioned_data,
+                                                        data_type=local_data_type,
+                                                        file_name_type=file_name_type)
+
+        ewald_matrix_features(conditioned_data,
+                              noa,
+                              data_type=local_data_type,
+                              file_name_type=file_name_type)
+
+        # -----------------
+        # --- Test data ---
+        # -----------------
+
+        condition = test_data[:, gfc.LABELS["number_of_total_atoms"]] == noa
+        conditioned_data = test_data[ condition ]
+        logger.info("number of atoms {0}; data.shape: {1}".format(noa, conditioned_data.shape))
+
+        file_name_type = "test_" + str(noa) + "_"
+        local_data_type = "test"
+        scan_through_geometry_files_and_extrac_features(conditioned_data,
+                                                        data_type=data_type,
+                                                        file_name_type=file_name_type)
+
+        ewald_matrix_features(conditioned_data,
+                              noa,
+                              data_type=local_data_type,
+                              file_name_type=file_name_type)
