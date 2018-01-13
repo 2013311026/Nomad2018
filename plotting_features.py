@@ -16,7 +16,7 @@ plt.figure()
 
 #plt.scatter(features[:, 5], data[:, -1])
 #plt.hist2d(data[:, -1], features[:, 1], bins=60)
-index = 7
+index = 8
 target = -1
 bg_index = 14
 

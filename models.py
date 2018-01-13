@@ -117,6 +117,32 @@ class BaseModel:
 
         return rmsle
 
+
+class PolynomialModel(BaseModel):
+
+    def __init__(self,
+                 rank=2,
+                 n_features=None,
+                 validation_data=None):
+        BaseModel.__init__(self, "PolynomialModel", n_features=n_features)
+        self.model = None
+        self.rank = rank
+
+    def fit(self, x, y):
+        # We use arrays of shape (n, m).
+        # polyfit requires (n, ) so ravel()
+        p = np.polyfit(x.ravel(), y.ravel(), self.rank)
+        self.model = np.poly1d(p)
+
+    def predict(self, x):
+
+        y_pred = self.model(x.ravel())
+        y_pred = y_pred.reshape(-1, 1)
+
+        return y_pred
+
+
+
 class GBRModel(BaseModel):
 
     def __init__(self,

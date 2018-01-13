@@ -2,6 +2,7 @@
 # work with the geometry file. These include processing
 # of the xyz coordinates as well as feature extraction files.
 
+import sys
 import time
 import os
 import glob
@@ -955,14 +956,14 @@ def scan_through_geometry_files_and_extrac_features(data,
 
     logger.info("new_data.shape: " + str(new_data.shape))
 
-    np.savetxt(file_name_type + "train_mod.csv", new_data, delimiter=",")
+    np.savetxt(file_name_type + "_train_mod.csv", new_data, delimiter=",")
     np.savetxt(file_name_type + "_rho_data.csv", rho_data, delimiter=",")
     np.savetxt(file_name_type + "_percentage_atom_data.csv", percentage_atom_data, delimiter=",")
     np.savetxt(file_name_type + "_unit_cell_data.csv", unit_cell_data, delimiter=",")
     np.savetxt(file_name_type + "_nn_bond_parameters_data.csv", nn_bond_parameters_data, delimiter=",")
     np.savetxt(file_name_type + "_angles_and_rs_data.csv", angles_and_rs_data, delimiter=",")
 
-    np.save(file_name_type + "train_mod.npy", new_data)
+    np.save(file_name_type + "_train_mod.npy", new_data)
     np.save(file_name_type + "_rho_data.npy", rho_data)
     np.save(file_name_type + "_percentage_atom_data.npy", percentage_atom_data)
     np.save(file_name_type + "_unit_cell_data.npy", unit_cell_data)
@@ -1140,11 +1141,13 @@ if __name__ == "__main__":
     assert np.array_equal(train_total_number_of_atoms, test_total_number_of_atoms), assert_error_text
 
 
-    #scan_through_geometry_files_and_extrac_features(train_data, data_type="train", file_name_type="train_")
-    ewald_matrix_features(train_data, -1, data_type="train", file_name_type="train_")
+    #scan_through_geometry_files_and_extrac_features(train_data, data_type="train", file_name_type="train")
+    ewald_matrix_features(train_data, -1, data_type="train", file_name_type="train")
 
-    scan_through_geometry_files_and_extrac_features(test_data, data_type="test", file_name_type="test_")
-    ewald_matrix_features(test_data, -1, data_type="test", file_name_type="test_")
+    #scan_through_geometry_files_and_extrac_features(test_data, data_type="test", file_name_type="test")
+    ewald_matrix_features(test_data, -1, data_type="test", file_name_type="test")
+
+    sys.exit()
 
     for i in range(len(train_total_number_of_atoms)):
 

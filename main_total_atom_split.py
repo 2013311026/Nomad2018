@@ -20,23 +20,37 @@ logger.addHandler(handler)
 logger.setLevel(gfc.LOGGING_LEVEL)
 
 
+def prepare_data_for_matrix_trace_based_model(noa,
+                                              data_type="train",
+                                              matrix_type="real_energy"):
+
+    # Load and prepare features
+    data = np.loadtxt(data_type + ".csv", delimiter=",", skiprows=1)
+
+    condition = data[:, gfc.NUMBER_OF_TOTAL_ATOMS] == noa
+    noa_data = data[condition]
+    noa_data = noa_data[noa_data[:, 0].argsort()]
+
+    matrix_files = glob.glob(data_type + "_" + str(noa) + "*" + str(matrix_type) + "*matrix*npy")
+    file_name = matrix_files[0]
+    matrix_data = np.load(file_name)
+
+    return noa_data, file_name, matrix_data
+
 def get_matrix_trace_based_model_for_noa(noa,
                                          model_class,
                                          model_parameters,
                                          plot_model=False,
-                                         y_type="band_gap"):
+                                         y_type="band_gap",
+                                         matrix_type="real_energy"):
     logger.info("Get matrix trace based model for NOA = {0}".format(noa))
 
-    # Load and prepare features
-    train_data = np.loadtxt("train.csv", delimiter=",", skiprows=1)
+    data = prepare_data_for_matrix_trace_based_model(noa,
+                                                     matrix_type=matrix_type)
 
-    condition = train_data[:, gfc.NUMBER_OF_TOTAL_ATOMS] == noa
-    train_noa_data = train_data[condition]
-    train_noa_data = train_noa_data[train_noa_data[:, 0].argsort()]
-
-    matrix_files = glob.glob("train_" + str(noa) + "*matrix*npy")
-    file_name = matrix_files[0]
-    matrix_data = np.load(file_name)
+    train_noa_data = data[0]
+    file_name      = data[1]
+    matrix_data    = data[2]
 
     #file_name = "train_" + str(noa) + "_ewald_sum_real_energy_matrix.npy"
     #matrix_data = np.load(file_name)
@@ -86,28 +100,26 @@ def get_matrix_trace_based_model_for_noa(noa,
     return trained_model
 
 
-def get_model_for_noa(noa,
-                      additional_feature_list,
-                      model_class,
-                      model_parameters,
-                      y_type="band_gap"):
+def prepare_data_for_model(noa,
+                           additional_feature_list,
+                           data_type="train",
+                           y_type="band_gap"):
 
-    logger.info("Get model for NOA = {0}".format(noa))
-
-    train_data = np.loadtxt("train.csv", delimiter=",", skiprows=1)
+    # Prepare data for non matrix trace based models.
+    data = np.loadtxt(data_type + ".csv", delimiter=",", skiprows=1)
 
     # If noa == -1 ignore the noa split.
-    train_noa_data = None
+    noa_data = None
     if noa == -1:
-        train_noa_data = train_data
+        noa_data = data
     else:
-        condition = train_data[:, gfc.NUMBER_OF_TOTAL_ATOMS] == noa
-        train_noa_data = train_data[condition]
-        train_noa_data = train_noa_data[train_noa_data[:, 0].argsort()]
+        condition = data[:, gfc.NUMBER_OF_TOTAL_ATOMS] == noa
+        noa_data = data[condition]
+        noa_data = noa_data[noa_data[:, 0].argsort()]
 
-    logger.info("train_noa_data.shape {0}".format(train_noa_data.shape))
+    logger.info("noa_data.shape {0}".format(noa_data.shape))
 
-    ids, x, y_fe, y_bg = sf.split_data_into_id_x_y(train_noa_data, data_type="train")
+    ids, x, y_fe, y_bg = sf.split_data_into_id_x_y(noa_data, data_type="train")
 
     logger.info("Adding additional features to data.")
     naf = len(additional_feature_list)
@@ -116,9 +128,9 @@ def get_model_for_noa(noa,
 
         file_name = None
         if noa == -1:
-            file_name = "train_" + additional_feature_list[i] + ".npy"
+            file_name = data_type + "_" + additional_feature_list[i] + ".npy"
         else:
-            file_name = "train_" + str(noa) + "_" + additional_feature_list[i] + ".npy"
+            file_name = data_type + "_" + str(noa) + "_" + additional_feature_list[i] + ".npy"
 
         logger.info("Aditional features file: {0}".format(file_name))
         additional_feature = np.load(file_name)
@@ -137,6 +149,66 @@ def get_model_for_noa(noa,
         logger.info("formation energy will be fitted.")
     else:
         pass
+
+    return x, y
+
+
+def get_model_for_noa(noa,
+                      additional_feature_list,
+                      model_class,
+                      model_parameters,
+                      y_type="band_gap"):
+
+    logger.info("Get model for NOA = {0}".format(noa))
+
+    # train_data = np.loadtxt("train.csv", delimiter=",", skiprows=1)
+    #
+    # # If noa == -1 ignore the noa split.
+    # train_noa_data = None
+    # if noa == -1:
+    #     train_noa_data = train_data
+    # else:
+    #     condition = train_data[:, gfc.NUMBER_OF_TOTAL_ATOMS] == noa
+    #     train_noa_data = train_data[condition]
+    #     train_noa_data = train_noa_data[train_noa_data[:, 0].argsort()]
+    #
+    # logger.info("train_noa_data.shape {0}".format(train_noa_data.shape))
+    #
+    # ids, x, y_fe, y_bg = sf.split_data_into_id_x_y(train_noa_data, data_type="train")
+    #
+    # logger.info("Adding additional features to data.")
+    # naf = len(additional_feature_list)
+    # for i in range(naf):
+    #     logger.info("Adding {0} features...".format(additional_feature_list[i]))
+    #
+    #     file_name = None
+    #     if noa == -1:
+    #         file_name = "train_" + additional_feature_list[i] + ".npy"
+    #     else:
+    #         file_name = "train_" + str(noa) + "_" + additional_feature_list[i] + ".npy"
+    #
+    #     logger.info("Aditional features file: {0}".format(file_name))
+    #     additional_feature = np.load(file_name)
+    #     logger.info("additional_feature.shape: {0}".format(additional_feature.shape))
+    #
+    #     x = np.hstack((x, additional_feature[:, 1:]))
+    #
+    # logger.info("x.shape: {0}".format(x.shape))
+    #
+    # y = None
+    # if y_type == "band_gap":
+    #     y = y_bg
+    #     logger.info("band gap will be fitted.")
+    # elif y_type == "formation_energy":
+    #     y = y_fe
+    #     logger.info("formation energy will be fitted.")
+    # else:
+    #     pass
+
+    x, y = prepare_data_for_model(noa,
+                                  additional_feature_list,
+                                  data_type="train",
+                                  y_type=y_type)
 
     _, n_features = x.shape
     model_parameters["n_features"] = n_features
@@ -159,15 +231,19 @@ if __name__ == "__main__":
     # number_of_total_atoms: rank
     # noa = 40 and noa = 80 not included
     # Simple models do not work for them.
-    noa_ranks = {10: 2, 20: 2, 30: 3, 60: 2}
+    noa_ranks = {10: [2, "real_energy"],
+                 20: [2, "reciprocal_energy"],
+                 30: [3, "total_energy"],
+                 60: [2, "total_energy"]}
     noa_bg_matrix_trace_models = {}
 
     model = PolynomialModel
-    for noa, rank in sorted(noa_ranks.items(), key=lambda t: t[0]):
+    for noa, rank_matrix_type in sorted(noa_ranks.items(), key=lambda t: t[0]):
         trained_model = get_matrix_trace_based_model_for_noa(noa,
                                                              model,
-                                                             model_parameters={"rank": rank},
-                                                             plot_model=True)
+                                                             model_parameters={"rank": rank_matrix_type[0]},
+                                                             plot_model=True,
+                                                             matrix_type=rank_matrix_type[1])
 
         noa_bg_matrix_trace_models[noa] = trained_model
 
@@ -225,6 +301,10 @@ if __name__ == "__main__":
                                          y_type="formation_energy")
 
 
+
+    prepare_data_for_matrix_trace_based_model(10,
+                                              data_type="test",
+                                              matrix_type="real_energy")
 
 
     # noa = 80

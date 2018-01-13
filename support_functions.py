@@ -171,15 +171,15 @@ def cross_validate(x,
         else:
             model.fit(train_data, train_targets)
 
-        custom_data = np.hstack((valid_data, valid_targets))
-        condition = custom_data[:, gfc.LABELS["number_of_total_atoms"] - 1] == 10
-        custom_data = custom_data[condition]
-        custom_valid_data = custom_data[:, 0:-1]
-        custom_targets_data = custom_data[:, -1].reshape(-1, 1)
-        logger.info("custom_valid_data.shape: {0}".format(custom_valid_data.shape))
-        logger.info("custom_targets_data.shape: {0}".format(custom_targets_data.shape))
-        custom_rmsle_valid = model.evaluate(custom_valid_data, custom_targets_data)
-        logger.info("custom_rmsle_valid: {0}".format(custom_rmsle_valid))
+        # custom_data = np.hstack((valid_data, valid_targets))
+        # condition = custom_data[:, gfc.LABELS["number_of_total_atoms"] - 1] == 10
+        # custom_data = custom_data[condition]
+        # custom_valid_data = custom_data[:, 0:-1]
+        # custom_targets_data = custom_data[:, -1].reshape(-1, 1)
+        # logger.info("custom_valid_data.shape: {0}".format(custom_valid_data.shape))
+        # logger.info("custom_targets_data.shape: {0}".format(custom_targets_data.shape))
+        # custom_rmsle_valid = model.evaluate(custom_valid_data, custom_targets_data)
+        # logger.info("custom_rmsle_valid: {0}".format(custom_rmsle_valid))
 
         rmsle_train = model.evaluate(train_data, train_targets)
         rmsle_valid = model.evaluate(valid_data, valid_targets)
@@ -201,9 +201,8 @@ def cross_validate(x,
 
 def one_left_cross_validation(x,
                               y,
-                              model_class,
-                              model_parameters=None,
-                              fraction=0.1):
+                              model_class=None,
+                              model_parameters=None):
 
     logger.info("One left cross validation...")
     n, m = x.shape
@@ -215,16 +214,16 @@ def one_left_cross_validation(x,
         train_data = np.delete(x, [i], axis=0)
         train_targets = np.delete(y, [i], axis=0)
 
-        logger.info("train_data.shape: {0}".format(train_data.shape))
-        logger.info("train_targets.shape: {0}".format(train_targets.shape))
+        logger.debug("train_data.shape: {0}".format(train_data.shape))
+        logger.debug("train_targets.shape: {0}".format(train_targets.shape))
 
         # valid_x is a single example so its shape
         # should be (1, n_features)
         valid_x = x[i, :].reshape(1, -1)
         valid_y = y[i, :].reshape(-1, 1)
 
-        logger.info("test_x.shape: {0}".format(valid_x.shape))
-        logger.info("test_y.shape: {0}".format(valid_y.shape))
+        logger.debug("test_x.shape: {0}".format(valid_x.shape))
+        logger.debug("test_y.shape: {0}".format(valid_y.shape))
 
         model_parameters["validation_data"] = (valid_x, valid_y)
         model = model_class(**model_parameters)
