@@ -1081,6 +1081,13 @@ def ewald_matrix_features(data,
         logger.info("total_energy_matrix trace: " + str(ewald_sum_data[i][6]))
 
     ewald_sum_data = np.hstack((ids, ewald_sum_data))
+
+    if noa != -1:
+        ewald_sum_real_energy_matrix = np.hstack((ids, ewald_sum_real_energy_matrix))
+        ewald_sum_reciprocal_energy_matrix = np.hstack((ids, ewald_sum_reciprocal_energy_matrix))
+        ewald_sum_total_energy_matrix = np.hstack((ids, ewald_sum_total_energy_matrix))
+        ewald_sum_point_energy_matrix = np.hstack((ids, ewald_sum_point_energy_matrix))
+
     np.savetxt(file_name_type + "_ewald_sum_data.csv", ewald_sum_data, delimiter=",")
     np.save(file_name_type + "_ewald_sum_data.npy", ewald_sum_data)
 
@@ -1133,12 +1140,11 @@ if __name__ == "__main__":
     assert np.array_equal(train_total_number_of_atoms, test_total_number_of_atoms), assert_error_text
 
 
-    # scan_through_geometry_files_and_extrac_features(train_data, data_type="train", file_name_type="train_")
-    # ewald_matrix_features(train_data, -1, data_type="train", file_name_type="train_")
-    #
-    # scan_through_geometry_files_and_extrac_features(test_data, data_type="test", file_name_type="test_")
-    # ewald_matrix_features(test_data, -1, data_type="test", file_name_type="test_")
+    #scan_through_geometry_files_and_extrac_features(train_data, data_type="train", file_name_type="train_")
+    ewald_matrix_features(train_data, -1, data_type="train", file_name_type="train_")
 
+    scan_through_geometry_files_and_extrac_features(test_data, data_type="test", file_name_type="test_")
+    ewald_matrix_features(test_data, -1, data_type="test", file_name_type="test_")
 
     for i in range(len(train_total_number_of_atoms)):
 
@@ -1153,7 +1159,7 @@ if __name__ == "__main__":
         logger.info("number of atoms {0}; data.shape: {1}".format(noa, conditioned_data.shape))
 
         # hist_data(data[:, -1], text=str(noa))
-        file_name_type = "train_" + str(noa) + "_"
+        file_name_type = "train_" + str(noa)
         local_data_type = "train"
         scan_through_geometry_files_and_extrac_features(conditioned_data,
                                                         data_type=local_data_type,
@@ -1172,7 +1178,7 @@ if __name__ == "__main__":
         conditioned_data = test_data[ condition ]
         logger.info("number of atoms {0}; data.shape: {1}".format(noa, conditioned_data.shape))
 
-        file_name_type = "test_" + str(noa) + "_"
+        file_name_type = "test_" + str(noa)
         local_data_type = "test"
         scan_through_geometry_files_and_extrac_features(conditioned_data,
                                                         data_type=data_type,

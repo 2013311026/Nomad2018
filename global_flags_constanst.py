@@ -18,9 +18,11 @@ LABELS["formation_energy_ev_natom"] = 12
 LABELS["bandgap_energy_ev"] = 13
 
 
+ID = 0
+NUMBER_OF_TOTAL_ATOMS = 2
+
+
 LOGGING_LEVEL = logging.INFO
-
-
 SPACE_GROUP_PROPERTIES = {12: 4,
                           33: 4,
                           167: 12,

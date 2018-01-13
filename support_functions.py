@@ -114,6 +114,20 @@ def cross_validate(x,
                    model_class,
                    model_parameters=None,
                    fraction=0.1):
+    """
+    Perform normal corss validation.
+    A fraction of the total data is used as
+    the test set. If, e.g., fraction=0.1 ten
+    cross validation rounds will be performed.
+
+    :param x:
+    :param y:
+    :param model_class:
+    :param model_parameters:
+    :param fraction:
+    :return:
+    """
+
 
     logger.debug("Cross validating data.")
 
@@ -150,6 +164,7 @@ def cross_validate(x,
         model_parameters["validation_data"] = (valid_data, valid_targets)
         model = model_class(**model_parameters)
 
+
         _, train_m = train_targets.shape
         if train_m == 1:
             model.fit(train_data, train_targets.ravel())
@@ -157,7 +172,7 @@ def cross_validate(x,
             model.fit(train_data, train_targets)
 
         custom_data = np.hstack((valid_data, valid_targets))
-        condition = custom_data[:, gfc.LABELS["number_of_total_atoms"] - 1] == 80
+        condition = custom_data[:, gfc.LABELS["number_of_total_atoms"] - 1] == 10
         custom_data = custom_data[condition]
         custom_valid_data = custom_data[:, 0:-1]
         custom_targets_data = custom_data[:, -1].reshape(-1, 1)
@@ -179,7 +194,61 @@ def cross_validate(x,
 
     logger.info("train_avg: {0}, valid_avg: {1}".format(train_avg, valid_avg))
 
+    # This printout is used by graph_performace.py to grab the
+    # results of grap_performance.py. Print is simpler that logging.
     print(str(train_avg) + "x" + str(valid_avg), end="")
+
+
+def one_left_cross_validation(x,
+                              y,
+                              model_class,
+                              model_parameters=None,
+                              fraction=0.1):
+
+    logger.info("One left cross validation...")
+    n, m = x.shape
+
+    train_avg = 0.0
+    valid_avg = 0.0
+    for i in range(n):
+
+        train_data = np.delete(x, [i], axis=0)
+        train_targets = np.delete(y, [i], axis=0)
+
+        logger.info("train_data.shape: {0}".format(train_data.shape))
+        logger.info("train_targets.shape: {0}".format(train_targets.shape))
+
+        # valid_x is a single example so its shape
+        # should be (1, n_features)
+        valid_x = x[i, :].reshape(1, -1)
+        valid_y = y[i, :].reshape(-1, 1)
+
+        logger.info("test_x.shape: {0}".format(valid_x.shape))
+        logger.info("test_y.shape: {0}".format(valid_y.shape))
+
+        model_parameters["validation_data"] = (valid_x, valid_y)
+        model = model_class(**model_parameters)
+
+        _, train_m = train_targets.shape
+        if train_m == 1:
+            model.fit(train_data, train_targets.ravel())
+        else:
+            model.fit(train_data, train_targets)
+
+        rmsle_train = model.evaluate(train_data, train_targets)
+        rmsle_valid = model.evaluate(valid_x, valid_y)
+
+        logger.info("i: {0}, rmsle_train: {1:.9f}, rmsle_valid: {2:.9f}".format(i, rmsle_train, rmsle_valid))
+
+        train_avg = train_avg + rmsle_train
+        valid_avg = valid_avg + rmsle_valid
+
+    train_avg = train_avg/n
+    valid_avg = valid_avg/n
+
+    logger.info("train_avg: {0}, valid_avg: {1}".format(train_avg, valid_avg))
+
+
 
 def get_percentage_of_o_atoms(percent_atom_al,
                               percent_atom_ga,
