@@ -22,7 +22,8 @@ logger.setLevel(gfc.LOGGING_LEVEL)
 
 def prepare_data_for_matrix_trace_based_model(noa,
                                               data_type="train",
-                                              matrix_type="real_energy"):
+                                              matrix_type="real_energy",
+                                              y_type="band_gap"):
 
     # Load and prepare features
     data = np.loadtxt(data_type + ".csv", delimiter=",", skiprows=1)
@@ -35,30 +36,10 @@ def prepare_data_for_matrix_trace_based_model(noa,
     file_name = matrix_files[0]
     matrix_data = np.load(file_name)
 
-    return noa_data, file_name, matrix_data
-
-def get_matrix_trace_based_model_for_noa(noa,
-                                         model_class,
-                                         model_parameters,
-                                         plot_model=False,
-                                         y_type="band_gap",
-                                         matrix_type="real_energy"):
-    logger.info("Get matrix trace based model for NOA = {0}".format(noa))
-
-    data = prepare_data_for_matrix_trace_based_model(noa,
-                                                     matrix_type=matrix_type)
-
-    train_noa_data = data[0]
-    file_name      = data[1]
-    matrix_data    = data[2]
-
-    #file_name = "train_" + str(noa) + "_ewald_sum_real_energy_matrix.npy"
-    #matrix_data = np.load(file_name)
-
-    assert np.array_equal(train_noa_data[:, 0], matrix_data[:, 0]), "Ids do not agree!"
+    assert np.array_equal(noa_data[:, 0], matrix_data[:, 0]), "Ids do not agree!"
 
     noa_matrix = matrix_data[:, 1:]
-    ids, x, y_fe, y_bg = sf.split_data_into_id_x_y(train_noa_data, data_type="train")
+    ids, x, y_fe, y_bg = sf.split_data_into_id_x_y(noa_data, data_type=data_type)
 
     n, m = noa_matrix.shape
 
@@ -74,8 +55,24 @@ def get_matrix_trace_based_model_for_noa(noa,
     elif y_type == "formation_energy":
         y = y_fe
     else:
-        pass
+        # If you reached this point then something is wrong.
+        # Most probably the provided y_type does not match
+        # "band_gap" nor does it match "formation_energy".
+        assert False, "y cannot be None!"
 
+    return x, y, ids
+
+def get_matrix_trace_based_model_for_noa(noa,
+                                         model_class,
+                                         model_parameters,
+                                         plot_model=False,
+                                         y_type="band_gap",
+                                         matrix_type="real_energy"):
+    logger.info("Get matrix trace based model for NOA = {0}".format(noa))
+
+    x, y, _ = prepare_data_for_matrix_trace_based_model(noa,
+                                                        matrix_type=matrix_type,
+                                                        y_type=y_type)
     _, n_features = x.shape
 
     model_parameters["n_features"] = n_features
@@ -87,13 +84,13 @@ def get_matrix_trace_based_model_for_noa(noa,
     trained_model = model_class(**model_parameters)
     trained_model.fit(x, y)
 
-    xp = np.linspace(np.min(matrix_traces), np.max(matrix_traces), 1000)
+    xp = np.linspace(np.min(x), np.max(x), 1000)
 
     if plot_model == True:
         plt.figure()
-        plt.plot(matrix_traces.ravel(), y_bg.ravel(),'.')
+        plt.plot(x.ravel(), y.ravel(),'.')
         plt.plot(xp, trained_model.predict(xp), '--')
-        plt.title("noa: {0}, {1}".format(noa, file_name))
+        plt.title("noa: {0}, {1}".format(noa, matrix_type))
         #plt.savefig("noa: {0}, {1}.eps".format(noa, file_name.replace(".npy","")))
         plt.show()
 
@@ -119,8 +116,9 @@ def prepare_data_for_model(noa,
 
     logger.info("noa_data.shape {0}".format(noa_data.shape))
 
-    ids, x, y_fe, y_bg = sf.split_data_into_id_x_y(noa_data, data_type="train")
+    ids, x, y_fe, y_bg = sf.split_data_into_id_x_y(noa_data, data_type=data_type)
 
+    logger.info("x.shape: {0}".format(x.shape))
     logger.info("Adding additional features to data.")
     naf = len(additional_feature_list)
     for i in range(naf):
@@ -143,14 +141,15 @@ def prepare_data_for_model(noa,
     y = None
     if y_type == "band_gap":
         y = y_bg
-        logger.info("band gap will be fitted.")
     elif y_type == "formation_energy":
         y = y_fe
-        logger.info("formation energy will be fitted.")
     else:
-        pass
+        # If you reached this point then something is wrong.
+        # Most probably the provided y_type does not match
+        # "band_gap" nor does it match "formation_energy".
+        assert False, "y cannot be None!"
 
-    return x, y
+    return x, y, ids
 
 
 def get_model_for_noa(noa,
@@ -161,54 +160,10 @@ def get_model_for_noa(noa,
 
     logger.info("Get model for NOA = {0}".format(noa))
 
-    # train_data = np.loadtxt("train.csv", delimiter=",", skiprows=1)
-    #
-    # # If noa == -1 ignore the noa split.
-    # train_noa_data = None
-    # if noa == -1:
-    #     train_noa_data = train_data
-    # else:
-    #     condition = train_data[:, gfc.NUMBER_OF_TOTAL_ATOMS] == noa
-    #     train_noa_data = train_data[condition]
-    #     train_noa_data = train_noa_data[train_noa_data[:, 0].argsort()]
-    #
-    # logger.info("train_noa_data.shape {0}".format(train_noa_data.shape))
-    #
-    # ids, x, y_fe, y_bg = sf.split_data_into_id_x_y(train_noa_data, data_type="train")
-    #
-    # logger.info("Adding additional features to data.")
-    # naf = len(additional_feature_list)
-    # for i in range(naf):
-    #     logger.info("Adding {0} features...".format(additional_feature_list[i]))
-    #
-    #     file_name = None
-    #     if noa == -1:
-    #         file_name = "train_" + additional_feature_list[i] + ".npy"
-    #     else:
-    #         file_name = "train_" + str(noa) + "_" + additional_feature_list[i] + ".npy"
-    #
-    #     logger.info("Aditional features file: {0}".format(file_name))
-    #     additional_feature = np.load(file_name)
-    #     logger.info("additional_feature.shape: {0}".format(additional_feature.shape))
-    #
-    #     x = np.hstack((x, additional_feature[:, 1:]))
-    #
-    # logger.info("x.shape: {0}".format(x.shape))
-    #
-    # y = None
-    # if y_type == "band_gap":
-    #     y = y_bg
-    #     logger.info("band gap will be fitted.")
-    # elif y_type == "formation_energy":
-    #     y = y_fe
-    #     logger.info("formation energy will be fitted.")
-    # else:
-    #     pass
-
-    x, y = prepare_data_for_model(noa,
-                                  additional_feature_list,
-                                  data_type="train",
-                                  y_type=y_type)
+    x, y, _ = prepare_data_for_model(noa,
+                                     additional_feature_list,
+                                     data_type="train",
+                                     y_type=y_type)
 
     _, n_features = x.shape
     model_parameters["n_features"] = n_features
@@ -231,6 +186,10 @@ if __name__ == "__main__":
     # number_of_total_atoms: rank
     # noa = 40 and noa = 80 not included
     # Simple models do not work for them.
+
+    result = np.zeros((601, 3))
+
+
     noa_ranks = {10: [2, "real_energy"],
                  20: [2, "reciprocal_energy"],
                  30: [3, "total_energy"],
@@ -247,12 +206,24 @@ if __name__ == "__main__":
 
         noa_bg_matrix_trace_models[noa] = trained_model
 
+        x, y, ids  = prepare_data_for_matrix_trace_based_model(noa,
+                                                               data_type="test",
+                                                               matrix_type=rank_matrix_type[1])
+
+        n, m = x.shape
+        for i in range(n):
+            id = int(ids[i])
+            result[id][0] = id
+            result[id][2] = trained_model.predict(x[i, 0])
+            #print("f: {0}".format(result[id]))
+
+
     print(noa_bg_matrix_trace_models)
 
     additional_feature_list = [#"rho_data",
                                #"percentage_atom_data",
-                               "unit_cell_data",
-                               "nn_bond_parameters_data",
+                               #"unit_cell_data",
+                               #"nn_bond_parameters_data",
                                #"angles_and_rs_data",
                                "ewald_sum_data"]
 
@@ -292,6 +263,20 @@ if __name__ == "__main__":
                                           model_parameters=xgb_regressor_model_parameters,
                                           y_type="band_gap")
 
+        x, y, ids = prepare_data_for_model(noa,
+                                           additional_feature_list,
+                                           data_type="test",
+                                           y_type="band_gap")
+
+        n, m = x.shape
+        for i in range(n):
+            id = int(ids[i])
+            result[id][0] = id
+            result[id][2] = trained_model.predict(x[i][:].reshape(1, -1))
+            #print("f: {0}".format(result[id]))
+
+
+
 
 
     fe_general_model = get_model_for_noa(-1,
@@ -300,11 +285,36 @@ if __name__ == "__main__":
                                          model_parameters=xgb_regressor_model_parameters,
                                          y_type="formation_energy")
 
+    x, y, ids = prepare_data_for_model(-1,
+                                       additional_feature_list,
+                                       data_type="test",
+                                       y_type="formation_energy")
+
+    n, m = x.shape
+    for i in range(n):
+        id = int(ids[i])
+        result[id][0] = id
+        result[id][1] = fe_general_model.predict(x[i][:].reshape(1, -1))
+        #print("f: {0}".format(result[id]))
 
 
-    prepare_data_for_matrix_trace_based_model(10,
-                                              data_type="test",
-                                              matrix_type="real_energy")
+    file = open("temp", "w")
+    file.write("id,formation_energy_ev_natom,bandgap_energy_ev\n")
+
+    for i in range(1, len(result)):
+        id = int(result[i][0])
+        fe = result[i][1]
+        bg = result[i][2]
+
+        if fe < 0.0:
+            fe = 0.0
+
+        if bg < 0.0:
+            bg = 0.0
+
+        file.write("{0},{1},{2}\n".format(id, fe, bg))
+
+    file.close()
 
 
     # noa = 80

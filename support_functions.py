@@ -171,15 +171,15 @@ def cross_validate(x,
         else:
             model.fit(train_data, train_targets)
 
-        # custom_data = np.hstack((valid_data, valid_targets))
-        # condition = custom_data[:, gfc.LABELS["number_of_total_atoms"] - 1] == 10
-        # custom_data = custom_data[condition]
-        # custom_valid_data = custom_data[:, 0:-1]
-        # custom_targets_data = custom_data[:, -1].reshape(-1, 1)
-        # logger.info("custom_valid_data.shape: {0}".format(custom_valid_data.shape))
-        # logger.info("custom_targets_data.shape: {0}".format(custom_targets_data.shape))
-        # custom_rmsle_valid = model.evaluate(custom_valid_data, custom_targets_data)
-        # logger.info("custom_rmsle_valid: {0}".format(custom_rmsle_valid))
+        custom_data = np.hstack((valid_data, valid_targets))
+        condition = custom_data[:, gfc.LABELS["number_of_total_atoms"] - 1] == 40
+        custom_data = custom_data[condition]
+        custom_valid_data = custom_data[:, 0:-1]
+        custom_targets_data = custom_data[:, -1].reshape(-1, 1)
+        logger.info("custom_valid_data.shape: {0}".format(custom_valid_data.shape))
+        logger.info("custom_targets_data.shape: {0}".format(custom_targets_data.shape))
+        custom_rmsle_valid = model.evaluate(custom_valid_data, custom_targets_data)
+        logger.info("custom_rmsle_valid: {0}".format(custom_rmsle_valid))
 
         rmsle_train = model.evaluate(train_data, train_targets)
         rmsle_valid = model.evaluate(valid_data, valid_targets)
