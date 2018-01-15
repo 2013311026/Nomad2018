@@ -30,7 +30,7 @@ feature_types = ["standard",
                  "unit_cell_nn_bond_parameters_symmetries_data",
                  "nn_bond_parameters_data"]
 
-steps = 10
+steps = 2
 n_features_types = len(feature_types)
 performance_train = np.zeros((steps, n_features_types))
 performance_valid = np.zeros((steps, n_features_types))

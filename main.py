@@ -1,18 +1,18 @@
 import logging
-import sys
+import glob
 import numpy as np
 import random
-from matplotlib import pyplot as plt
+
+import matplotlib.pyplot as plt
 
 import global_flags_constanst as gfc
 import support_functions as sf
 
 from models import BaseModel
-from models import GBRModel
+from models import PolynomialModel
 from models import XGBRegressorModel
-from models import FeedForwardNeuralNetworkModel
-
-from keras import backend as K
+from models import RidgeRegressionModel
+from models import KernelRidgeRegressionModel
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
@@ -22,338 +22,229 @@ logger.addHandler(handler)
 logger.setLevel(gfc.LOGGING_LEVEL)
 
 
+def prepare_data_for_matrix_trace_based_model(noa,
+                                              data_type="train",
+                                              matrix_type="real_energy",
+                                              y_type="band_gap"):
+
+    # Load and prepare features
+    data = np.loadtxt(data_type + ".csv", delimiter=",", skiprows=1)
+
+    condition = data[:, gfc.NUMBER_OF_TOTAL_ATOMS] == noa
+    noa_data = data[condition]
+    noa_data = noa_data[noa_data[:, 0].argsort()]
+
+    matrix_files = glob.glob(data_type + "_" + str(noa) + "*" + str(matrix_type) + "*matrix*npy")
+    file_name = matrix_files[0]
+    matrix_data = np.load(file_name)
+
+    print(matrix_files)
+    print(noa_data[:, 0])
+    print(matrix_data[:, 0])
+
+    assert np.array_equal(noa_data[:, 0], matrix_data[:, 0]), "Ids do not agree!"
+
+    noa_matrix = matrix_data[:, 1:]
+    ids, x, y_fe, y_bg = sf.split_data_into_id_x_y(noa_data, data_type=data_type)
+
+    n, m = noa_matrix.shape
+
+    matrix_traces = np.zeros((n, 1))
+    for i in range(n):
+        matrix_traces[i] = np.trace(noa_matrix[i, :].reshape(noa, noa))
+
+    # Features ready for training
+    x = matrix_traces
+
+    if y_type == "band_gap":
+        y = y_bg
+    elif y_type == "formation_energy":
+        y = y_fe
+    else:
+        # If you reached this point then something is wrong.
+        # Most probably the provided y_type does not match
+        # "band_gap" nor does it match "formation_energy".
+        assert False, "y cannot be None!"
+
+    return x, y, ids
+
+def get_matrix_trace_based_model_for_noa(noa,
+                                         model_class,
+                                         model_parameters,
+                                         plot_model=False,
+                                         y_type="band_gap",
+                                         matrix_type="real_energy"):
+    logger.info("Get matrix trace based model for NOA = {0}".format(noa))
+
+    x, y, _ = prepare_data_for_matrix_trace_based_model(noa,
+                                                        matrix_type=matrix_type,
+                                                        y_type=y_type)
+    _, n_features = x.shape
+
+    model_parameters["n_features"] = n_features
+    sf.one_left_cross_validation(x,
+                                 y,
+                                 model_class=model_class,
+                                 model_parameters=model_parameters)
+
+    trained_model = model_class(**model_parameters)
+    trained_model.fit(x, y)
+
+    xp = np.linspace(np.min(x), np.max(x), 1000)
+
+    if plot_model == True:
+        plt.figure()
+        plt.plot(x.ravel(), y.ravel(),'.')
+        plt.plot(xp, trained_model.predict(xp), '--')
+        plt.title("noa: {0}, {1}".format(noa, matrix_type))
+        #plt.savefig("noa: {0}, {1}.eps".format(noa, file_name.replace(".npy","")))
+        plt.show()
+
+    return trained_model
 
 
-def objective(y_true, y_pred):
-    pass
+def prepare_data_for_model(noa,
+                           additional_feature_list,
+                           data_type="train",
+                           y_type="band_gap"):
+
+    # Prepare data for non matrix trace based models.
+    data = np.loadtxt(data_type + ".csv", delimiter=",", skiprows=1)
+
+    # If noa == -1 ignore the noa split.
+    noa_data = None
+    if noa == -1:
+        noa_data = data
+    else:
+        condition = data[:, gfc.NUMBER_OF_TOTAL_ATOMS] == noa
+        noa_data = data[condition]
+        noa_data = noa_data[noa_data[:, 0].argsort()]
+
+    logger.info("noa_data.shape {0}".format(noa_data.shape))
+
+    ids, x, y_fe, y_bg = sf.split_data_into_id_x_y(noa_data, data_type=data_type)
+
+    logger.info("x.shape: {0}".format(x.shape))
+    logger.info("Adding additional features to data.")
+    naf = len(additional_feature_list)
+    for i in range(naf):
+        logger.info("Adding {0} features...".format(additional_feature_list[i]))
+
+        file_name = None
+        if noa == -1:
+            file_name = data_type + "_" + additional_feature_list[i] + ".npy"
+        else:
+            file_name = data_type + "_" + str(noa) + "_" + additional_feature_list[i] + ".npy"
+
+        logger.info("Aditional features file: {0}".format(file_name))
+        additional_feature = np.load(file_name)
+        logger.info("additional_feature.shape: {0}".format(additional_feature.shape))
+
+        x = np.hstack((x, additional_feature[:, 1:]))
+
+    logger.info("x.shape: {0}".format(x.shape))
+
+    y = None
+    if y_type == "band_gap":
+        y = y_bg
+    elif y_type == "formation_energy":
+        y = y_fe
+    else:
+        # If you reached this point then something is wrong.
+        # Most probably the provided y_type does not match
+        # "band_gap" nor does it match "formation_energy".
+        assert False, "y cannot be None!"
+
+    return x, y, ids
 
 
-def plot_two_features(data, x_label, y_label):
+def get_model_for_noa(noa,
+                      additional_feature_list,
+                      model_class,
+                      model_parameters,
+                      y_type="band_gap"):
 
-    x = data[:, gfc.LABELS[x_label]]
-    y = data[:, gfc.LABELS[y_label]]
+    logger.info("Get model for NOA = {0}".format(noa))
 
-    plt.scatter(x, y, c="g", alpha=0.5, marker="o")
-    plt.xlabel(x_label)
-    plt.ylabel(y_label)
-    plt.show()
+    x, y, _ = prepare_data_for_model(noa,
+                                     additional_feature_list,
+                                     data_type="train",
+                                     y_type=y_type)
 
+    _, n_features = x.shape
+    model_parameters["n_features"] = n_features
+    sf.cross_validate(x,
+                      y,
+                      model_class,
+                      model_parameters=model_parameters,
+                      fraction=0.25)
 
-def recombine_data_shuffle_and_split(ids, x, y_fe, y_bg):
-    """
-    Once x has been filled with additional features
-    we recombine the features with the labes and shuffle them.
-    Once they are shuffled we split them back to their
-    original form.
+    trained_model = model_class(**model_parameters)
+    trained_model.fit(x, y)
 
-    :param ids:
-    :param x:
-    :param y_fe:
-    :param y_bg:
-    :return:
-    """
-    data = np.hstack((ids, x, y_fe, y_bg))
-    np.random.shuffle(data)
-
-    _, m = data.shape
-
-    ids = data[:, 0]
-    x = data[:, 1:(m-2)]
-    y_fe = data[:, m-2].reshape((-1, 1))
-    y_bg = data[:, m-1].reshape((-1, 1))
-
-    return ids, x, y_fe, y_bg
+    return trained_model
 
 
 if __name__ == "__main__":
 
-    data = np.loadtxt("train.csv", delimiter=",", skiprows=1)
-    rho_data = np.loadtxt("train_rho_data.csv", delimiter=",", skiprows=0)
-    percentage_atom_data = np.loadtxt("train_percentage_atom_data.csv", delimiter=",", skiprows=0)
-    unit_cell_data = np.loadtxt("train_unit_cell_data.csv", delimiter=",", skiprows=0)
-    nn_bond_parameters_data = np.loadtxt("train_nn_bond_parameters_data.csv", delimiter=",", skiprows=0)
-    symmetries_data = np.loadtxt("train_symmetries_data.csv", delimiter=",", skiprows=0)
-    angles_and_rs_data = np.loadtxt("train_angles_and_rs_data.csv", delimiter=",", skiprows=0)
-    ewald_sum_data = np.loadtxt("train_ewald_sum_data.csv", delimiter=",", skiprows=0)
+    # Separate models will be fit for the
+    # specimen with the following number of atoms.
+    # number_of_total_atoms: rank
+    # noa = 40 and noa = 80 not included
+    # Simple models do not work for them.
 
-    logger.info("train_rho_data.shape: {0}".format(rho_data.shape))
-    logger.info("train_percentage_atom_data.shape: {0}".format(percentage_atom_data.shape))
-    logger.info("train_unit_cell_data.shape: {0}".format(unit_cell_data.shape))
-    logger.info("train_nn_bond_parameters_data.shape: {0}".format(nn_bond_parameters_data.shape))
-    logger.info("train_symmetries_data.shape: {0}".format(symmetries_data.shape))
-    logger.info("train_angles_and_rs_data.shape: {0}".format(angles_and_rs_data.shape))
-
-    test_data = np.loadtxt("test.csv", delimiter=",", skiprows=1)
-    test_rho_data = np.loadtxt("test_rho_data.csv", delimiter=",", skiprows=0)
-    test_percentage_atom_data = np.loadtxt("test_percentage_atom_data.csv", delimiter=",", skiprows=0)
-    test_unit_cell_data = np.loadtxt("test_unit_cell_data.csv", delimiter=",", skiprows=0)
-    test_nn_bond_parameters_data = np.loadtxt("test_nn_bond_parameters_data.csv", delimiter=",", skiprows=0)
-    test_symmetries_data = np.loadtxt("test_symmetries_data.csv", delimiter=",", skiprows=0)
-    test_angles_and_rs_data = np.loadtxt("test_angles_and_rs_data.csv", delimiter=",", skiprows=0)
-
-    # for key, _ in labels.items():
-    #     plot_two_features(data, key, "formation_energy_ev_natom")
-    #     plot_two_features(data, key, "bandgap_energy_ev")
-
-    #vectors, atoms = sf.read_geometry_file("/home/tadek/Coding/Kaggle/Nomad2018/train/1/geometry.xyz")
-    #print(vectors)
-    #print(atoms)
-
-    #print("n atoms: " + str(len(atoms)))
-
-    n, m = data.shape
-    # ids = data[:, 0]
-    # x = data[:, 1:12]
-    # y_fe = data[:, 12]
-    # y_bg = data[:, 13]
-
-    ids = data[:, 0].reshape((-1, 1))
-    x = data[:, 1:(m-2)]
-
-    test_n, test_m = test_data.shape
-    test_ids = test_data[:, 0].reshape((-1, 1))
-    test_x = test_data[:, 1:]
-
-    # Create additional non geometry features.
-    # percent_atom_o = sf.get_percentage_of_o_atoms(data[:, labels["percent_atom_al"]],
-    #                                               data[:, labels["percent_atom_ga"]],
-    #                                               data[:, labels["percent_atom_in"]])
-    # for i in range(10):
-    #     logger.info("{0:.6f}, {1:.6f}, {2:.6f}, {3:.6f}".format(percent_atom_o[i],
-    #                                                             data[i, labels["percent_atom_al"]],
-    #                                                             data[i, labels["percent_atom_ga"]],
-    #                                                             data[i, labels["percent_atom_in"]]))
-    #     logger.info("sum: {0}".format(percent_atom_o[i] +
-    #                                   data[i, labels["percent_atom_al"]] +
-    #                                   data[i, labels["percent_atom_ga"]] +
-    #                                   data[i, labels["percent_atom_in"]]))
-
-    features = sys.argv[1]
-
-    if features == "rho_data":
-        logger.info("Adding rho_data")
-        x = np.hstack((x, rho_data[:, 1:]))
-
-        test_x = np.hstack((test_x, test_rho_data[:, 1:]))
-
-    elif features == "rho_percentage_atom_data":
-        logger.info("Adding rho_percentage_atom_data")
-        x = np.hstack((x, rho_data[:, 1:], percentage_atom_data[:, 1:]))
-
-        test_x = np.hstack((test_x, test_rho_data[:, 1:], test_percentage_atom_data[:, 1:]))
-
-    elif features == "rho_percentage_atom_unit_cell_data":
-        logger.info("Adding rho_percentage_atom_unit_cell_data")
-        x = np.hstack((x,
-                       rho_data[:, 1:],
-                       percentage_atom_data[:, 1:],
-                       unit_cell_data[:, 1:]))
-
-        test_x = np.hstack((test_x,
-                            test_rho_data[:, 1:],
-                            test_percentage_atom_data[:, 1:],
-                            test_unit_cell_data[:, 1:]))
-
-    elif features == "rho_percentage_atom_unit_cell_nn_bond_parameters_data":
-        logger.info("Adding rho_percentage_atom_unit_cell_nn_bond_parameters_data")
-        x = np.hstack((x,
-                       rho_data[:, 1:],
-                       percentage_atom_data[:, 1:],
-                       unit_cell_data[:, 1:],
-                       nn_bond_parameters_data[:, 1:]))
-
-        test_x = np.hstack((test_x,
-                            test_rho_data[:, 1:],
-                            test_percentage_atom_data[:, 1:],
-                            test_unit_cell_data[:, 1:],
-                            test_nn_bond_parameters_data[:, 1:]))
-
-    elif features == "rho_percentage_atom_unit_cell_nn_bond_parameters_symmetries_data":
-        logger.info("Adding rho_percentage_atom_unit_cell_nn_bond_parameters_symmetries_data")
-        x = np.hstack((x,
-                       rho_data[:, 1:],
-                       percentage_atom_data[:, 1:],
-                       unit_cell_data[:, 1:],
-                       nn_bond_parameters_data[:, 1:],
-                       symmetries_data[:, 1:]))
-
-        test_x = np.hstack((test_x,
-                            test_rho_data[:, 1:],
-                            test_percentage_atom_data[:, 1:],
-                            test_unit_cell_data[:, 1:],
-                            test_nn_bond_parameters_data[:, 1:],
-                            test_symmetries_data[:, 1:]))
-
-    elif features == "unit_cell_data":
-        logger.info("Adding unit_cell_data")
-        x = np.hstack((x, unit_cell_data[:, 1:]))
-
-        test_x = np.hstack((test_x, test_unit_cell_data[:, 1:]))
-
-    elif features == "unit_cell_nn_bond_parameters_data":
-        logger.info("Adding unit_cell_nn_bond_parameters_data")
-        x = np.hstack((x, unit_cell_data[:, 1:], nn_bond_parameters_data[:, 1:]))
-
-        test_x = np.hstack((test_x, test_unit_cell_data[:, 1:], test_nn_bond_parameters_data[:, 1:]))
-
-    elif features == "unit_cell_nn_bond_parameters_angles_and_rs_data":
-        logger.info("Adding unit_cell_nn_bond_parameters_angles_and_rs_data")
-        x = np.hstack((x, unit_cell_data[:, 1:], nn_bond_parameters_data[:, 1:], angles_and_rs_data[:, 1:]))
-
-        test_x = np.hstack((test_x,
-                            test_unit_cell_data[:, 1:],
-                            test_nn_bond_parameters_data[:, 1:],
-                            test_angles_and_rs_data[:, 1:]))
-
-    elif features == "unit_cell_nn_bond_parameters_symmetries_data":
-        logger.info("Adding unit_cell_nn_bond_parameters_symmetries_data")
-        x = np.hstack((x, unit_cell_data[:, 1:],
-                       nn_bond_parameters_data[:, 1:],
-                       symmetries_data[:, 1:]))
-
-        test_x = np.hstack((test_x,
-                            test_unit_cell_data[:, 1:],
-                            test_nn_bond_parameters_data[:, 1:],
-                            test_symmetries_data[:, 1:]))
-
-    elif features == "nn_bond_parameters_data":
-        logger.info("Adding nn_bond_parameters_data")
-        x = np.hstack((x, nn_bond_parameters_data[:, 1:]))
-
-        test_x = np.hstack((test_x, test_nn_bond_parameters_data[:, 1:]))
-
-    elif features == "nn_bond_parameters_angles_and_rs_data":
-        logger.info("Adding nn_bond_parameters_angles_and_rs_data")
-        x = np.hstack((x, nn_bond_parameters_data[:, 1:], angles_and_rs_data[:, 1:]))
-
-        test_x = np.hstack((test_x, test_nn_bond_parameters_data[:, 1:], test_angles_and_rs_data[:, 1:]))
-
-    elif features == "nn_bond_parameters_symmetries_data":
-        logger.info("Adding nn_bond_parameters_symmetries_data")
-        x = np.hstack((x, nn_bond_parameters_data[:, 1:], symmetries_data[:, 1:]))
-
-        test_x = np.hstack((test_x, test_nn_bond_parameters_data[:, 1:], test_symmetries_data[:, 1:]))
-
-    elif features == "ewald_sum_data":
-        logger.info("Adding ewald_sum_data")
-        x = ewald_sum_data
-
-    elif features == "unit_cell_nn_bond_parameters_symmetries_ewald_sum_data":
-        logger.info("Adding ewald_sum_data")
-        x = np.hstack((x, unit_cell_data[:, 1:],
-                       nn_bond_parameters_data[:, 1:],
-                       symmetries_data[:, 1:],
-                       ewald_sum_data[:, 1:]))
-
-        test_x = np.hstack((test_x,
-                            test_unit_cell_data[:, 1:],
-                            test_nn_bond_parameters_data[:, 1:],
-                            test_symmetries_data[:, 1:]))
-
-    elif features == "standard":
-        pass
-    else:
-        sys.exit("features parameter not valid!")
-
-    y_fe = data[:, m-2].reshape((-1, 1))
-    y_bg = data[:, m-1].reshape((-1, 1))
-
-    ids, x, y_fe, y_bg = recombine_data_shuffle_and_split(ids, x, y_fe, y_bg)
-
-
-    _, n_features = x.shape
-
-    logger.info("x: {0}".format(x.shape))
-    logger.info("y_fe: {0}".format(y_fe.shape))
-    logger.info("y_bg: {0}".format(y_bg.shape))
-
-    y = np.hstack((y_fe, y_bg))
-    #y = y_bg
-
-    _, n_output = y.shape
-
-    logger.info("y: {0}".format(y.shape))
-
-    gbrmodel_parameters = {"n_estimators": 100,
-                           "learning_rate": 0.1,
-                           "max_depth": 4,
-                           "random_state": random.randint(1, 2**32 - 1),
-                           "verbose": 0,
-                           "max_features": "sqrt",
-                           "n_features": n_features}
+    additional_feature_list = [#"rho_data",
+                               #"percentage_atom_data",
+                               "unit_cell_data",
+                               "nn_bond_parameters_data",
+                               #"angles_and_rs_data",
+                               "ewald_sum_data"]
 
     seed = int(random.randint(1, 2**16 - 1))
     colsample_bytree = random.random()
     subsample = random.random()
-    xgb_regressor_model_parameters = {"max_depth": 6,
-                                      "learning_rate": 0.1,
-                                      "n_estimators": 300,
-                                      "silent": True,
-                                      "objective": 'reg:linear',
-                                      "booster": 'gbtree',
-                                      "n_jobs": 1,
-                                      "nthread": None,
-                                      "gamma": 0.0,
-                                      "min_child_weight": 5,
-                                      "max_delta_step": 0,
-                                      "subsample": subsample,
-                                      "colsample_bytree": colsample_bytree,
-                                      "colsample_bylevel": 1,
-                                      "reg_alpha": 0,
-                                      "reg_lambda": 1,
-                                      "scale_pos_weight": 1,
-                                      "base_score": 0.5,
-                                      "random_state": seed + 1,
-                                      "seed": seed,
-                                      "missing": None,
-                                      "n_features": n_features}
+    model_parameters = {"max_depth": 5,
+                        "learning_rate": 0.1,
+                        "n_estimators": 300,
+                        "silent": True,
+                        "objective": 'reg:linear',
+                        "booster": 'gbtree',
+                        "n_jobs": 1,
+                        "nthread": None,
+                        "gamma": 0.0,
+                        "min_child_weight": 5,
+                        "max_delta_step": 0,
+                        "subsample": subsample,
+                        "colsample_bytree": colsample_bytree,
+                        "colsample_bylevel": 1,
+                        "reg_alpha": 0,
+                        "reg_lambda": 1,
+                        "scale_pos_weight": 1,
+                        "base_score": 0.5,
+                        "random_state": seed + 1,
+                        "seed": seed,
+                        "missing": None}
+
+    # model_parameters = {"alpha": 0.5,
+    #                     "kernel": "chi2",
+    #                       "gamma": 0.1,
+    #                       "degree": 10,
+    #                       "coef0": 1,
+    #                       "n_features": None,
+    #                       "max_features": None,
+    #                       "validation_data": None}
+
+    bg_general_model = get_model_for_noa(-1,
+                                         additional_feature_list,
+                                         model_class=XGBRegressorModel,
+                                         model_parameters=model_parameters,
+                                         y_type="band_gap")
 
 
-    sf.cross_validate(x,
-                      y_bg,
-                      XGBRegressorModel,
-                      model_parameters=xgb_regressor_model_parameters,
-                      fraction=0.25)
+    # fe_general_model = get_model_for_noa(-1,
+    #                                      additional_feature_list,
+    #                                      model_class=XGBRegressorModel,
+    #                                      model_parameters=xgb_regressor_model_parameters,
+    #                                      y_type="formation_energy")
 
-    # nn_model_parameters = {"n_features": n_features,
-    #                        "n_hidden_layers": 2,
-    #                        "n_output": n_output,
-    #                        "layer_dim": 100,
-    #                        "dropout_rate": 0.9,
-    #                        "alpha": 0.01,
-    #                        "learning_rate": 0.01,
-    #                        "loss": "mean_squared_logarithmic_error"}
-    #
-    # K.get_session()
-    # sf.cross_validate(x,
-    #                   y,
-    #                   FeedForwardNeuralNetworkModel,
-    #                   model_parameters=nn_model_parameters,
-    #                   fraction=0.25)
-    #
-    # K.clear_session()
 
-    sys.exit()
-
-    # Band gap model
-    bgm = XGBRegressorModel(**xgb_regressor_model_parameters)
-
-    # Formation energy model
-    fem = XGBRegressorModel(**xgb_regressor_model_parameters)
-    #
-    fem.fit(x, y_fe)
-    bgm.fit(x, y_bg)
-
-    rmsle_fe = fem.evaluate(x, y_fe)
-    rmsle_bg = bgm.evaluate(x, y_bg)
-
-    rmsle = np.mean(rmsle_bg + rmsle_fe)
-    print("rmsle_fe: " + str(rmsle_fe))
-    print("rmsle_bg: " + str(rmsle_bg))
-    print("rmsle: {0}".format(rmsle))
-
-    sf.pipeline_flow(test_ids,
-                     test_x,
-                     fem,
-                     bgm,
-                     "temp")

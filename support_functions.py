@@ -172,7 +172,10 @@ def cross_validate(x,
             model.fit(train_data, train_targets)
 
         custom_data = np.hstack((valid_data, valid_targets))
-        condition = custom_data[:, gfc.LABELS["number_of_total_atoms"] - 1] == 40
+        condition = custom_data[:, gfc.LABELS["number_of_total_atoms"] - 1] == 20
+
+        assert len(condition) != 0, "You condition is not valid!"
+
         custom_data = custom_data[condition]
         custom_valid_data = custom_data[:, 0:-1]
         custom_targets_data = custom_data[:, -1].reshape(-1, 1)

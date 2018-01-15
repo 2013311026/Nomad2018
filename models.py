@@ -1,7 +1,6 @@
 import logging
 import numpy as np
 import xgboost as xgb
-from sklearn.ensemble import GradientBoostingRegressor
 
 from keras.layers import Input, Dense, Dropout
 from keras.layers.advanced_activations import LeakyReLU
@@ -13,6 +12,9 @@ from keras import callbacks
 import support_functions as sf
 import global_flags_constanst as gf
 
+from sklearn import linear_model
+from sklearn.kernel_ridge import KernelRidge
+from sklearn.ensemble import GradientBoostingRegressor
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
@@ -144,6 +146,10 @@ class PolynomialModel(BaseModel):
 
 
 class GBRModel(BaseModel):
+    """
+    All sk-learn models need to inherit from this model.
+
+    """
 
     def __init__(self,
                  n_estimators=100,
@@ -169,6 +175,40 @@ class GBRModel(BaseModel):
         y_pred = self.model.predict(x)
         y_pred = y_pred.reshape(-1, 1)
         return y_pred
+
+
+class RidgeRegressionModel(GBRModel):
+
+    def __init__(self,
+                 alpha=0.5,
+                 normalize=False,
+                 n_features=None,
+                 max_features=None,
+                 validation_data=None):
+        BaseModel.__init__(self, "RidgeRegressModel", n_features=n_features)
+        self.model = linear_model.Ridge(alpha=alpha,
+                                        normalize=normalize)
+
+
+class KernelRidgeRegressionModel(GBRModel):
+
+    def __init__(self,
+                 alpha=0.5,
+                 kernel="polynomial",
+                 gamma=0.1,
+                 degree=3,
+                 coef0=1,
+                 n_features=None,
+                 max_features=None,
+                 validation_data=None):
+        BaseModel.__init__(self, "RidgeRegressModel", n_features=n_features)
+        self.model = KernelRidge(alpha=alpha,
+                                 kernel=kernel,
+                                 degree=degree,
+                                 gamma=gamma,
+                                 coef0=coef0)
+
+
 
 
 class XGBRegressorModel(BaseModel):

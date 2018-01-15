@@ -11,6 +11,8 @@ import support_functions as sf
 from models import BaseModel
 from models import PolynomialModel
 from models import XGBRegressorModel
+from models import RidgeRegressionModel
+from models import KernelRidgeRegressionModel
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
@@ -35,6 +37,10 @@ def prepare_data_for_matrix_trace_based_model(noa,
     matrix_files = glob.glob(data_type + "_" + str(noa) + "*" + str(matrix_type) + "*matrix*npy")
     file_name = matrix_files[0]
     matrix_data = np.load(file_name)
+
+    print(matrix_files)
+    print(noa_data[:, 0])
+    print(matrix_data[:, 0])
 
     assert np.array_equal(noa_data[:, 0], matrix_data[:, 0]), "Ids do not agree!"
 
@@ -81,18 +87,24 @@ def get_matrix_trace_based_model_for_noa(noa,
                                  model_class=model_class,
                                  model_parameters=model_parameters)
 
+
+    logger.info("x.shape: {0}".format(x.shape))
+    logger.info("y.shape: {0}".format(y.shape))
     trained_model = model_class(**model_parameters)
     trained_model.fit(x, y)
 
-    xp = np.linspace(np.min(x), np.max(x), 1000)
+    xp = np.linspace(np.min(x), np.max(x), 1000).reshape(-1, 1)
 
     if plot_model == True:
         plt.figure()
         plt.plot(x.ravel(), y.ravel(),'.')
-        plt.plot(xp, trained_model.predict(xp), '--')
+        plt.plot(xp.ravel(), trained_model.predict(xp).ravel(), '--')
         plt.title("noa: {0}, {1}".format(noa, matrix_type))
         #plt.savefig("noa: {0}, {1}.eps".format(noa, file_name.replace(".npy","")))
         plt.show()
+
+        for_save = np.hstack((x.reshape(-1, 1), y.reshape(-1, 1)))
+        np.save("for_plot.npy", for_save)
 
     return trained_model
 
@@ -189,7 +201,6 @@ if __name__ == "__main__":
 
     result = np.zeros((601, 3))
 
-
     noa_ranks = {10: [2, "real_energy"],
                  20: [2, "reciprocal_energy"],
                  30: [3, "total_energy"],
@@ -197,28 +208,47 @@ if __name__ == "__main__":
     noa_bg_matrix_trace_models = {}
 
     model = PolynomialModel
+    model_parameters = {"alpha": 0.5,
+                        "kernel": "chi2",
+                        "gamma": 0.1,
+                        "degree": 3,
+                        "coef0": 1,
+                        "n_features": None,
+                        "max_features": None,
+                        "validation_data": None}
+
     for noa, rank_matrix_type in sorted(noa_ranks.items(), key=lambda t: t[0]):
         trained_model = get_matrix_trace_based_model_for_noa(noa,
                                                              model,
                                                              model_parameters={"rank": rank_matrix_type[0]},
+                                                             #model_parameters={"alpha": 0.5},
+                                                             #model_parameters=model_parameters,
                                                              plot_model=True,
                                                              matrix_type=rank_matrix_type[1])
 
         noa_bg_matrix_trace_models[noa] = trained_model
 
-        x, y, ids  = prepare_data_for_matrix_trace_based_model(noa,
-                                                               data_type="test",
-                                                               matrix_type=rank_matrix_type[1])
+        x, y, ids = prepare_data_for_matrix_trace_based_model(noa,
+                                                              data_type="test",
+                                                              matrix_type=rank_matrix_type[1])
 
+
+        y = np.zeros(x.shape)
         n, m = x.shape
         for i in range(n):
             id = int(ids[i])
             result[id][0] = id
-            result[id][2] = trained_model.predict(x[i, 0])
+
+            y_prediction = trained_model.predict(x[i, 0])
+            y[i] = y_prediction
+            result[id][2] = y_prediction
             #print("f: {0}".format(result[id]))
 
 
-    print(noa_bg_matrix_trace_models)
+        np.save("for_plot_test.npy", np.hstack((x, y)))
+        input("Press Enter to continue...")
+
+
 
     additional_feature_list = [#"rho_data",
                                #"percentage_atom_data",
@@ -315,120 +345,3 @@ if __name__ == "__main__":
         file.write("{0},{1},{2}\n".format(id, fe, bg))
 
     file.close()
-
-
-    # noa = 80
-    #
-    # # Load and prepare features
-    # train_data = np.loadtxt("train.csv", delimiter=",", skiprows=1)
-    #
-    # condition = train_data[:, gfc.NUMBER_OF_TOTAL_ATOMS] == noa
-    # train_noa_data = train_data[condition]
-    # train_noa_data = train_noa_data[train_noa_data[:,0].argsort()]
-    #
-    # print(train_noa_data[:, 0])
-    #
-    # matrix_files = glob.glob("train_" + str(noa) + "*matrix*npy")
-    #
-    # matrix_data = np.load(matrix_files[0])
-    #
-    # logger.info("matrix_data.shape: {0}".format(matrix_data.shape))
-    # logger.info(matrix_data[:, 0])
-    #
-    # assert np.array_equal(train_noa_data[:, 0], matrix_data[:, 0]), "Ids do not agree!"
-    #
-    # noa_matrix = matrix_data[:, 1:]
-    # ids, x, y_fe, y_bg = sf.split_data_into_id_x_y(train_noa_data, data_type="train")
-    #
-    # n, m = noa_matrix.shape
-    #
-    # # for i in range(n):
-    # #     fig = plt.figure()
-    # #     text=str(y_bg[i]) + " eV"
-    # #     #sf.plot_matrix(noa_matrix[i, :].reshape(noa, noa), text=text)
-    # #
-    # #     ax = fig.add_subplot(111)
-    # #     cax = ax.matshow(noa_matrix[i, :].reshape(noa, noa))
-    # #     fig.colorbar(cax)
-    # #     plt.title(text)
-    # #     plt.draw()
-    # # plt.show()
-    #
-    # matrix_traces = np.zeros((n, 1))
-    # for i in range(n):
-    #     matrix_traces[i] = np.trace(noa_matrix[i, :].reshape(noa, noa))
-    #
-    # # logger.info("matrix_traces: {0}".format(matrix_traces.ravel()))
-    # # logger.info("y_bg: {0}".format(y_bg.ravel()))
-    # #
-    # plt.figure()
-    #
-    # plt.scatter(matrix_traces.ravel(), y_bg.ravel())
-    #
-    # plt.show()
-    #
-    # z = np.polyfit(matrix_traces.ravel(), y_bg.ravel(), 2)
-    # p = np.poly1d(z)
-    #
-    # xp = np.linspace(np.min(matrix_traces), np.max(matrix_traces), 1000)
-    #
-    # plt.figure()
-    #
-    # plt.plot(matrix_traces.ravel(), y_bg.ravel(),'.')
-    # plt.plot(xp, p(xp), '--')
-    #
-    # plt.show()
-    # #
-    #
-    # # Features ready for training
-    # #x = noa_matrix
-    # x = matrix_traces
-    # y = y_bg
-    #
-    # _, n_features = x.shape
-    #
-    # # seed = int(random.randint(1, 2**16 - 1))
-    # # colsample_bytree = random.random()
-    # # subsample = random.random()
-    # # xgb_regressor_model_parameters = {"max_depth": 30,
-    # #                                   "learning_rate": 0.1,
-    # #                                   "n_estimators": 600,
-    # #                                   "silent": True,
-    # #                                   "objective": 'reg:linear',
-    # #                                   "booster": 'gbtree',
-    # #                                   "n_jobs": 1,
-    # #                                   "nthread": None,
-    # #                                   "gamma": 1.0,
-    # #                                   "min_child_weight": 5,
-    # #                                   "max_delta_step": 0,
-    # #                                   "subsample": subsample,
-    # #                                   "colsample_bytree": colsample_bytree,
-    # #                                   "colsample_bylevel": 1,
-    # #                                   "reg_alpha": 0,
-    # #                                   "reg_lambda": 1,
-    # #                                   "scale_pos_weight": 1,
-    # #                                   "base_score": 0.5,
-    # #                                   "random_state": seed + 1,
-    # #                                   "seed": seed,
-    # #                                   "missing": None,
-    # #                                   "n_features": n_features}
-    # #
-    # # sf.one_left_cross_validation(x,
-    # #                              y,
-    # #                              XGBRegressorModel,
-    # #                              model_parameters=xgb_regressor_model_parameters,
-    # #                              fraction=0.1)
-    #
-    #
-    # # sf.one_left_cross_validation(x,
-    # #                              y,
-    # #                              BaseModel,
-    # #                              model_parameters={"n_features": n_features},
-    # #                              fraction=0.1)
-    #
-    # sf.one_left_cross_validation(x,
-    #                              y,
-    #                              PolynomialModel,
-    #                              model_parameters={"rank": 2,
-    #                                                "n_features": n_features},
-    #                              fraction=0.1)
