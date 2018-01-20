@@ -1,5 +1,6 @@
 import logging
 import numpy as np
+import math
 from mpl_toolkits.mplot3d import axes3d
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -172,22 +173,28 @@ def cross_validate(x,
             model.fit(train_data, train_targets)
 
         custom_data = np.hstack((valid_data, valid_targets))
-        condition = custom_data[:, gfc.LABELS["number_of_total_atoms"] - 1] == 20
-
-        assert len(condition) != 0, "You condition is not valid!"
-
+        condition = custom_data[:, gfc.LABELS["number_of_total_atoms"] - 1] == 30
         custom_data = custom_data[condition]
-        custom_valid_data = custom_data[:, 0:-1]
-        custom_targets_data = custom_data[:, -1].reshape(-1, 1)
-        logger.info("custom_valid_data.shape: {0}".format(custom_valid_data.shape))
-        logger.info("custom_targets_data.shape: {0}".format(custom_targets_data.shape))
-        custom_rmsle_valid = model.evaluate(custom_valid_data, custom_targets_data)
-        logger.info("custom_rmsle_valid: {0}".format(custom_rmsle_valid))
+
+        if custom_data.shape[0] != 0:
+            logger.debug("custom_data.shape: {0}".format(custom_data.shape))
+            custom_valid_data = custom_data[:, 0:-1]
+            custom_targets_data = custom_data[:, -1].reshape(-1, 1)
+            logger.debug("custom_valid_data.shape: {0}".format(custom_valid_data.shape))
+            logger.debug("custom_targets_data.shape: {0}".format(custom_targets_data.shape))
+            custom_rmsle_valid = model.evaluate(custom_valid_data, custom_targets_data)
+            logger.info("custom_rmsle_valid: {0}".format(custom_rmsle_valid))
 
         rmsle_train = model.evaluate(train_data, train_targets)
         rmsle_valid = model.evaluate(valid_data, valid_targets)
 
         logger.info("i: {0}, rmsle_train: {1:.9f}, rmsle_valid: {2:.9f}".format(i, rmsle_train, rmsle_valid))
+
+        if rmsle_valid > 0.10:
+            logger.info("------------------------------------------------------")
+            logger.info("rmsle_valid too large, cross validation will stop now!")
+            logger.info("------------------------------------------------------")
+            return math.inf
 
         train_avg = train_avg + rmsle_train
         valid_avg = valid_avg + rmsle_valid
@@ -199,8 +206,9 @@ def cross_validate(x,
 
     # This printout is used by graph_performace.py to grab the
     # results of grap_performance.py. Print is simpler that logging.
-    print(str(train_avg) + "x" + str(valid_avg), end="")
+    print(str(train_avg) + "x" + str(valid_avg), end="\n")
 
+    return valid_avg
 
 def one_left_cross_validation(x,
                               y,

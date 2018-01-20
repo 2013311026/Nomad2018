@@ -200,11 +200,18 @@ if __name__ == "__main__":
     # Simple models do not work for them.
 
     result = np.zeros((601, 3))
+    preliminary_predictions = np.zeros((2401, 2))
+
+    for i in range(len(preliminary_predictions)):
+        preliminary_predictions[i, 0] = i
+
 
     noa_ranks = {10: [2, "real_energy"],
                  20: [2, "reciprocal_energy"],
                  30: [3, "total_energy"],
+                 #40: [2, "total_energy"],
                  60: [2, "total_energy"]}
+                 #80: [10, "total_energy"]}
     noa_bg_matrix_trace_models = {}
 
     model = PolynomialModel
@@ -226,7 +233,21 @@ if __name__ == "__main__":
                                                              plot_model=True,
                                                              matrix_type=rank_matrix_type[1])
 
+
+        train_x, train_y, train_ids = prepare_data_for_matrix_trace_based_model(noa,
+                                                                                data_type="train",
+                                                                                matrix_type=rank_matrix_type[1])
+
+        n, m = train_x.shape
+        for i in range(n):
+            id = int(train_ids[i])
+            preliminary_predictions[id][0] = id
+
+            y_prediction = trained_model.predict(train_x[i, 0])
+            preliminary_predictions[id][1] = y_prediction
+
         noa_bg_matrix_trace_models[noa] = trained_model
+
 
         x, y, ids = prepare_data_for_matrix_trace_based_model(noa,
                                                               data_type="test",
@@ -246,8 +267,10 @@ if __name__ == "__main__":
 
 
         np.save("for_plot_test.npy", np.hstack((x, y)))
-        input("Press Enter to continue...")
+        # input("Press Enter to continue...")
 
+    np.savetxt("train_preliminary_predictions_data.csv", preliminary_predictions[1:, :], delimiter=",")
+    np.save("train_preliminary_predictions_data.npy", preliminary_predictions[1:, :])
 
 
     additional_feature_list = [#"rho_data",

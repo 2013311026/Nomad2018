@@ -86,7 +86,7 @@ class BaseModel:
             y_pred = self.predict(x)
             y_true = y_true.reshape((-1, 1))
 
-            logger.info("Example predictions:")
+            logger.debug("Example predictions:")
 
             if n == 1:
                 # number of example to print
@@ -97,7 +97,7 @@ class BaseModel:
                 noetp = 0
 
             for i in range(noetp):
-                logger.info("y_pred: {0}; y_true: {1}".format(y_pred[i], y_true[i]))
+                logger.debug("y_pred: {0}; y_true: {1}".format(y_pred[i], y_true[i]))
 
             rmsle = sf.root_mean_squared_logarithmic_error(y_true, y_pred)
         elif m == 2:
