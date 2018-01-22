@@ -16,15 +16,15 @@ plt.figure()
 
 #plt.scatter(features[:, 5], data[:, -1])
 #plt.hist2d(data[:, -1], features[:, 1], bins=60)
-index = 8
+index = 2
 target = -1
 bg_index = 14
 
-plt.scatter(custom_data[custom_data[:, bg_index] == 10, index], custom_data[custom_data[:, bg_index] == 10, target], label="10")
-plt.scatter(custom_data[custom_data[:, bg_index] == 20, index], custom_data[custom_data[:, bg_index] == 20, target], label="20")
-plt.scatter(custom_data[custom_data[:, bg_index] == 30, index], custom_data[custom_data[:, bg_index] == 30, target], label="30")
+#plt.scatter(custom_data[custom_data[:, bg_index] == 10, index], custom_data[custom_data[:, bg_index] == 10, target], label="10")
+#plt.scatter(custom_data[custom_data[:, bg_index] == 20, index], custom_data[custom_data[:, bg_index] == 20, target], label="20")
+#plt.scatter(custom_data[custom_data[:, bg_index] == 30, index], custom_data[custom_data[:, bg_index] == 30, target], label="30")
 plt.scatter(custom_data[custom_data[:, bg_index] == 40, index], custom_data[custom_data[:, bg_index] == 40, target], label="40")
-plt.scatter(custom_data[custom_data[:, bg_index] == 60, index], custom_data[custom_data[:, bg_index] == 60, target], label="60")
+#plt.scatter(custom_data[custom_data[:, bg_index] == 60, index], custom_data[custom_data[:, bg_index] == 60, target], label="60")
 plt.scatter(custom_data[custom_data[:, bg_index] == 80, index], custom_data[custom_data[:, bg_index] == 80, target], label="80")
 
 plt.legend(ncol=3)

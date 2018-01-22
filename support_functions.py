@@ -1,11 +1,11 @@
 import logging
 import numpy as np
 import math
+import glob
 from mpl_toolkits.mplot3d import axes3d
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
-import global_flags_constanst as gf
 from support_classes import Atom
 import global_flags_constanst as gfc
 
@@ -15,7 +15,7 @@ handler = logging.StreamHandler()
 formatter = logging.Formatter("%(asctime)s %(name)-12s %(levelname)-8s %(message)s")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-logger.setLevel(gf.LOGGING_LEVEL)
+logger.setLevel(gfc.LOGGING_LEVEL)
 
 
 def split_data_into_id_x_y(data, data_type="train"):
@@ -71,6 +71,9 @@ def read_geometry_file(file_path):
 
     return vectors, atoms, atom_count
 
+
+def mean_squared_error(y_true, y_pred):
+    return K.mean(K.square(y_pred - y_true), axis=-1)
 
 def root_mean_squared_logarithmic_error(y_true, y_pred):
     # y_true and y_pred should
@@ -172,18 +175,22 @@ def cross_validate(x,
         else:
             model.fit(train_data, train_targets)
 
-        custom_data = np.hstack((valid_data, valid_targets))
-        condition = custom_data[:, gfc.LABELS["number_of_total_atoms"] - 1] == 30
-        custom_data = custom_data[condition]
+        for j in range(len(gfc.NUMBER_OF_TOTAL_ATOMS_LIST)):
+            custom_data = np.hstack((valid_data, valid_targets))
+            condition = custom_data[:, gfc.LABELS["number_of_total_atoms"] - 1] == gfc.NUMBER_OF_TOTAL_ATOMS_LIST[j]
+            custom_data = custom_data[condition]
 
-        if custom_data.shape[0] != 0:
-            logger.debug("custom_data.shape: {0}".format(custom_data.shape))
-            custom_valid_data = custom_data[:, 0:-1]
-            custom_targets_data = custom_data[:, -1].reshape(-1, 1)
-            logger.debug("custom_valid_data.shape: {0}".format(custom_valid_data.shape))
-            logger.debug("custom_targets_data.shape: {0}".format(custom_targets_data.shape))
-            custom_rmsle_valid = model.evaluate(custom_valid_data, custom_targets_data)
-            logger.info("custom_rmsle_valid: {0}".format(custom_rmsle_valid))
+            amount_of_custom_data = custom_data.shape[0]
+            if amount_of_custom_data != 0:
+                logger.debug("custom_data.shape: {0}".format(custom_data.shape))
+                custom_valid_data = custom_data[:, 0:-1]
+                custom_targets_data = custom_data[:, -1].reshape(-1, 1)
+                logger.debug("custom_valid_data.shape: {0}".format(custom_valid_data.shape))
+                logger.debug("custom_targets_data.shape: {0}".format(custom_targets_data.shape))
+                custom_rmsle_valid = model.evaluate(custom_valid_data, custom_targets_data)
+                logger.info("custom_rmsle_valid for {0} atoms (amount: {1}): {2}".format(gfc.NUMBER_OF_TOTAL_ATOMS_LIST[j],
+                                                                                         amount_of_custom_data,
+                                                                                         custom_rmsle_valid))
 
         rmsle_train = model.evaluate(train_data, train_targets)
         rmsle_valid = model.evaluate(valid_data, valid_targets)
@@ -283,6 +290,187 @@ def get_percentage_of_o_atoms(percent_atom_al,
     return percent_atom_o
 
 
+
+def prepare_data_for_matrix_trace_based_model(noa,
+                                              data_type="train",
+                                              matrix_type="real_energy",
+                                              y_type="band_gap"):
+
+    # Load and prepare features
+    data = np.loadtxt(data_type + ".csv", delimiter=",", skiprows=1)
+
+    condition = data[:, gfc.NUMBER_OF_TOTAL_ATOMS] == noa
+    noa_data = data[condition]
+    noa_data = noa_data[noa_data[:, 0].argsort()]
+
+    matrix_files = glob.glob(data_type + "_" + str(noa) + "*" + str(matrix_type) + "*matrix*npy")
+    file_name = matrix_files[0]
+    matrix_data = np.load(file_name)
+
+    print(matrix_files)
+    print(noa_data[:, 0])
+    print(matrix_data[:, 0])
+
+    assert np.array_equal(noa_data[:, 0], matrix_data[:, 0]), "Ids do not agree!"
+
+    noa_matrix = matrix_data[:, 1:]
+    ids, x, y_fe, y_bg = split_data_into_id_x_y(noa_data, data_type=data_type)
+
+    n, m = noa_matrix.shape
+
+    logger.info("n: {0}, m: {1}".format(n, m))
+    matrix_traces = np.zeros((n, 1))
+
+    if m == noa:
+        for i in range(n):
+            matrix_traces[i] = np.sum(noa_matrix[i, :])
+    else:
+        for i in range(n):
+            matrix_traces[i] = np.trace(noa_matrix[i, :].reshape(noa, noa))
+
+    # Features ready for training
+    x = matrix_traces
+
+    if y_type == "band_gap":
+        y = y_bg
+    elif y_type == "formation_energy":
+        y = y_fe
+    else:
+        # If you reached this point then something is wrong.
+        # Most probably the provided y_type does not match
+        # "band_gap" nor does it match "formation_energy".
+        assert False, "y cannot be None!"
+
+    return x, y, ids
+
+def get_matrix_trace_based_model_for_noa(noa,
+                                         model_class,
+                                         model_parameters,
+                                         plot_model=False,
+                                         y_type="band_gap",
+                                         matrix_type="real_energy"):
+    logger.info("Get matrix trace based model for NOA = {0}".format(noa))
+
+    x, y, _ = prepare_data_for_matrix_trace_based_model(noa,
+                                                        matrix_type=matrix_type,
+                                                        y_type=y_type)
+    _, n_features = x.shape
+
+    model_parameters["n_features"] = n_features
+    one_left_cross_validation(x,
+                              y,
+                              model_class=model_class,
+                              model_parameters=model_parameters)
+
+    trained_model = model_class(**model_parameters)
+    trained_model.fit(x, y)
+
+    xp = np.linspace(np.min(x), np.max(x), 1000)
+
+    if plot_model == True:
+        plt.figure()
+        plt.plot(x.ravel(), y.ravel(),'.')
+        plt.plot(xp, trained_model.predict(xp), '--')
+        plt.title("noa: {0}, {1}".format(noa, matrix_type))
+        #plt.savefig("noa: {0}, {1}.eps".format(noa, file_name.replace(".npy","")))
+        plt.show()
+
+    return trained_model
+
+
+def prepare_data_for_model(noa,
+                           additional_feature_list,
+                           data_type="train",
+                           y_type="band_gap"):
+
+    # Prepare data for non matrix trace based models.
+    data = np.loadtxt(data_type + ".csv", delimiter=",", skiprows=1)
+
+    # If noa == -1 ignore the noa split.
+    noa_data = None
+    if noa == -1:
+        noa_data = data
+    else:
+        condition = data[:, gfc.NUMBER_OF_TOTAL_ATOMS] == noa
+        noa_data = data[condition]
+        noa_data = noa_data[noa_data[:, 0].argsort()]
+
+    logger.info("noa_data.shape {0}".format(noa_data.shape))
+
+    ids, x, y_fe, y_bg = split_data_into_id_x_y(noa_data, data_type=data_type)
+
+    logger.debug("x.shape: {0}".format(x.shape))
+    logger.info("Adding additional features to data.")
+    naf = len(additional_feature_list)
+    for i in range(naf):
+        logger.info("Adding {0} features...".format(additional_feature_list[i]))
+
+        file_name = None
+        if noa == -1:
+            file_name = data_type + "_" + additional_feature_list[i] + ".npy"
+        else:
+            file_name = data_type + "_" + str(noa) + "_" + additional_feature_list[i] + ".npy"
+
+        logger.info("Aditional features file: {0}".format(file_name))
+        additional_feature = np.load(file_name)
+        logger.info("additional_feature.shape: {0}".format(additional_feature.shape))
+
+        x = np.hstack((x, additional_feature[:, 1:]))
+
+    logger.info("x.shape: {0}".format(x.shape))
+
+    y = None
+    if y_type == "band_gap":
+        y = y_bg
+    elif y_type == "formation_energy":
+        y = y_fe
+    else:
+        # If you reached this point then something is wrong.
+        # Most probably the provided y_type does not match
+        # "band_gap" nor does it match "formation_energy".
+        assert False, "y cannot be None!"
+
+    # Features to delete
+    ftd = [i for i in range(30, 49 +1)]
+    x = np.delete(x, ftd, axis=1)
+
+    duplicates = [395 - 1, 1215 - 1, 2075 - 1, 308 - 1, 531 - 1, 2319 - 1, 2370 - 1]
+    x = np.delete(x, duplicates, axis=0)
+    y = np.delete(y, duplicates, axis=0)
+
+    logger.info("x.shape after removal: {0}".format(x.shape))
+    return x, y, ids
+
+
+def get_model_for_noa(noa,
+                      additional_feature_list,
+                      model_class,
+                      model_parameters,
+                      y_type="band_gap"):
+
+    logger.info("Get model for NOA = {0}".format(noa))
+
+    x, y, _ = prepare_data_for_model(noa,
+                                     additional_feature_list,
+                                     data_type="train",
+                                     y_type=y_type)
+
+    _, n_features = x.shape
+    model_parameters["n_features"] = n_features
+    valid_avg = cross_validate(x,
+                                y,
+                                model_class,
+                                model_parameters=model_parameters,
+                                fraction=0.25)
+
+    trained_model = model_class(**model_parameters)
+    if valid_avg != math.inf:
+        trained_model.fit(x, y)
+
+    return trained_model, valid_avg
+
+
+
 if __name__ == "__main__":
     file_path = "/home/tadek/Coding/Kaggle/Nomad2018/train/1/geometry.xyz"
 
@@ -290,3 +478,4 @@ if __name__ == "__main__":
 
     for key, val in atom_count.items():
         print("{0}: {1}".format(key, val))
+
