@@ -264,10 +264,10 @@ class XGBRegressorModel(BaseModel):
     def fit(self, x, y):
         self.model.fit(x, y)
 
-        fi = self.model.feature_importances_
-        logger.info("Number of features in feature_importances_: {0}".format(len(fi)))
-        for i in range(len(fi)):
-            logger.info("feature_id: {0}; importance {1:.9f}".format(i, fi[i]))
+        # fi = self.model.feature_importances_
+        # logger.info("Number of features in feature_importances_: {0}".format(len(fi)))
+        # for i in range(len(fi)):
+        #     logger.info("feature_id: {0}; importance {1:.9f}".format(i, fi[i]))
         #xgb.plot_importance(self.model)
 
     def predict(self, x):

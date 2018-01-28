@@ -2,6 +2,7 @@ import logging
 import numpy as np
 import math
 import glob
+import operator
 from mpl_toolkits.mplot3d import axes3d
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -113,6 +114,27 @@ def pipeline_flow(ids,
         f.close()
 
 
+def pipeline_flow_split(ids,
+                        x_fe,
+                        x_bg,
+                        formation_energy_model,
+                        band_gap_model,
+                        submission_file_name):
+
+    with open(submission_file_name, "w") as f:
+
+        f.write("id,formation_energy_ev_natom,bandgap_energy_ev\n")
+        m, _ = x_bg.shape
+        # logger.info("m: {0}; n: {1}".format(m, n))
+        for i in range(m):
+            id = int(ids[i])
+            fe = formation_energy_model.predict(x_fe[i, :].reshape(1, -1))
+            bg = band_gap_model.predict(x_bg[i, :].reshape(1, -1))
+            # print("id: {0}, fe: {1}, bg: {2}".format(id, fe[0][0], bg[0][0]))
+
+            f.write("{0},{1},{2}\n".format(id, fe[0][0], bg[0][0]))
+        f.close()
+
 def cross_validate(x,
                    y,
                    model_class,
@@ -168,7 +190,6 @@ def cross_validate(x,
         model_parameters["validation_data"] = (valid_data, valid_targets)
         model = model_class(**model_parameters)
 
-
         _, train_m = train_targets.shape
         if train_m == 1:
             model.fit(train_data, train_targets.ravel())
@@ -197,11 +218,11 @@ def cross_validate(x,
 
         logger.info("i: {0}, rmsle_train: {1:.9f}, rmsle_valid: {2:.9f}".format(i, rmsle_train, rmsle_valid))
 
-        if rmsle_valid > 0.10:
-            logger.info("------------------------------------------------------")
-            logger.info("rmsle_valid too large, cross validation will stop now!")
-            logger.info("------------------------------------------------------")
-            return math.inf
+        # if rmsle_valid > 0.10:
+        #     logger.info("------------------------------------------------------")
+        #     logger.info("rmsle_valid too large, cross validation will stop now!")
+        #     logger.info("------------------------------------------------------")
+        #     return math.inf
 
         train_avg = train_avg + rmsle_train
         valid_avg = valid_avg + rmsle_valid
@@ -306,10 +327,6 @@ def prepare_data_for_matrix_trace_based_model(noa,
     matrix_files = glob.glob(data_type + "_" + str(noa) + "*" + str(matrix_type) + "*matrix*npy")
     file_name = matrix_files[0]
     matrix_data = np.load(file_name)
-
-    print(matrix_files)
-    print(noa_data[:, 0])
-    print(matrix_data[:, 0])
 
     assert np.array_equal(noa_data[:, 0], matrix_data[:, 0]), "Ids do not agree!"
 
@@ -431,14 +448,25 @@ def prepare_data_for_model(noa,
         assert False, "y cannot be None!"
 
     # Features to delete
-    ftd = [i for i in range(30, 49 +1)]
-    x = np.delete(x, ftd, axis=1)
+    # ftd = [i for i in range(30, 49 +1)]
+    # x = np.delete(x, ftd, axis=1)
 
-    duplicates = [395 - 1, 1215 - 1, 2075 - 1, 308 - 1, 531 - 1, 2319 - 1, 2370 - 1]
-    x = np.delete(x, duplicates, axis=0)
-    y = np.delete(y, duplicates, axis=0)
+    if data_type == "train":
+        duplicates = [395 - 1, 1215 - 1, 2075 - 1, 308 - 1, 531 - 1, 2319 - 1, 2370 - 1]
+        x = np.delete(x, duplicates, axis=0)
+        y = np.delete(y, duplicates, axis=0)
+    #
+    #
+    # logger.info("x.shape after removal: {0}".format(x.shape))
 
-    logger.info("x.shape after removal: {0}".format(x.shape))
+    # left = [5, 6, 8, 9, 10, 11, 31, 33, 34, 35, 36, 37, 38, 41, 45, 47, 49, 50, 52, 57, 59,
+    #         60, 61, 63, 68, 70, 73, 74, 78, 79, 82, 84, 86, 90, 94, 95, 96, 98, 99, 100, 103,
+    #         104, 105]
+
+    # left = [5, 6, 8, 103,
+    #         104, 105]
+    # x = np.take(x, left, axis=1)
+
     return x, y, ids
 
 
@@ -468,6 +496,20 @@ def get_model_for_noa(noa,
         trained_model.fit(x, y)
 
     return trained_model, valid_avg
+
+
+def feature_split(x,
+                  y,
+                  feature_index=0,
+                  feature_value=45,
+                  op=operator.gt):
+
+    xf = np.hstack((x, y))
+    xf = xf[op(xf[:, feature_index],feature_value)]
+    yf = xf[:, -1].reshape(-1, 1)
+    xf = xf[:, 0:-1]
+
+    return xf, yf
 
 
 

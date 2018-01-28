@@ -34,6 +34,7 @@ if __name__ == "__main__":
     result = np.zeros((601, 3))
     preliminary_predictions = np.zeros((2401, 2))
 
+
     for i in range(len(preliminary_predictions)):
         preliminary_predictions[i, 0] = i
 
@@ -68,6 +69,8 @@ if __name__ == "__main__":
         train_x, train_y, train_ids = sf.prepare_data_for_matrix_trace_based_model(noa,
                                                                                    data_type="train",
                                                                                    matrix_type=rank_matrix_type[1])
+
+
 
         n, m = train_x.shape
         for i in range(n):
@@ -155,7 +158,7 @@ if __name__ == "__main__":
         for i in range(n):
             id = int(ids[i])
             result[id][0] = id
-            result[id][2] = trained_model.predict(x[i][:].reshape(1, -1))
+            result[id][2] = 0 #trained_model.predict(x[i][:].reshape(1, -1))
             #print("f: {0}".format(result[id]))
 
 
@@ -177,6 +180,9 @@ if __name__ == "__main__":
         result[id][1] = fe_general_model.predict(x[i][:].reshape(1, -1))
         #print("f: {0}".format(result[id]))
 
+
+    np.savetxt("test_preliminary_predictions_data.csv", result[1:, 0::2], delimiter=",")
+    np.save("test_preliminary_predictions_data.npy", result[1:, 0::2])
 
     file = open("temp", "w")
     file.write("id,formation_energy_ev_natom,bandgap_energy_ev\n")

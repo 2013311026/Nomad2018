@@ -34,7 +34,18 @@ logger.addHandler(file_handler)
 logger.setLevel(gfc.LOGGING_LEVEL)
 
 
+def feature_split(x,
+                  y,
+                  feature_index=0,
+                  feature_value=45,
+                  op=operator.gt):
 
+    xf = np.hstack((x, y))
+    xf = xf[op(xf[:, feature_index],feature_value)]
+    yf = xf[:, -1].reshape(-1, 1)
+    xf = xf[:, 0:-1]
+
+    return xf, yf
 
 
 if __name__ == "__main__":
@@ -100,28 +111,35 @@ if __name__ == "__main__":
     #                                      model_parameters=xgb_regressor_model_parameters,
     #                                      y_type="formation_energy")
 
-    noa = 40
+    noa = 80
     x, y, ids = sf.prepare_data_for_model(noa,
                                           additional_feature_list,
                                           data_type="train",
                                           y_type="band_gap")
 
-
     print("x space groups: {0}".format(np.unique(x[:, 0])))
 
+    # plt.figure()
+    # plt.scatter(x[:, -5], y)
+    # plt.show()
+
+
     plt.figure()
-    for sg in [33, 227]:
+    plotting_feature_index = -4
+    for sg in [12, 33, 194, 206]:
         xf, yf = sf.feature_split(x,
                                   y,
                                   feature_index=0,
                                   feature_value=sg,
                                   op=operator.eq)
 
-        plt.scatter(xf[:, -7], yf,
+        plt.scatter(xf[:, plotting_feature_index], yf,
                     label=str(sg))
+
 
     plt.legend(ncol=3)
     plt.show()
+
 
     xt, yt, idst = sf.prepare_data_for_model(noa,
                                              additional_feature_list,
