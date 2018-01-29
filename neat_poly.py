@@ -34,37 +34,6 @@ class Atom:
         self.t = t
         self.c = c
 
-    def __eq__(self, other):
-        if (abs(self.x - other.x) < Atom.ee and
-            abs(self.y - other.y) < Atom.ee and
-            abs(self.z - other.z) < Atom.ee and
-            self.t == other.t):
-
-            return True
-        else:
-            return False
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-
-    def __hash__(self):
-        s = str(self.x) + str(self.y) + str(self.z) + str(self.t)
-        return hash(s)
-
-
-    def __str__(self):
-
-        s = "x: " + str(self.x) + \
-            " y: " + str(self.y) + \
-            " z: " + str(self.z) + \
-            " t: " + str(self.t)
-
-        return s
-
-    def __repr__(self):
-        return self.__str__()
-
 
 def split_data_into_id_x_y(data, data_type="train"):
 
@@ -112,7 +81,7 @@ def vector_length(vec):
 
 def read_geometry_file(path_to_file):
     """
-    Read geometry file and save the contants into
+    Read geometry file and save the data into
     a list of vectors and a list of Atoms.
 
     :param path_to_file:
@@ -156,7 +125,6 @@ def read_geometry_file(path_to_file):
         a = Atom(x, y, z, t, c)
         uc_atoms.append(a)
     logger.info("Geomtery file read.")
-    # uc_atoms = UCAtoms(uc_atoms)
 
     return vectors, uc_atoms
 
@@ -166,6 +134,10 @@ def ewald_matrix_features(data,
                           file_name=""):
 
     # noa - number of atoms in unit cell
+    # ids - ids of each point
+    # x - the provides features in *.csv
+    # y_fe - formation energy (not used here)
+    # y_bg - band gap
     ids, x, y_fe, y_bg = split_data_into_id_x_y(data)
 
     n, m = ids.shape
@@ -177,6 +149,8 @@ def ewald_matrix_features(data,
         vectors, uc_atoms = read_geometry_file(data_type + "/" + str(c_id) + "/geometry.xyz")
         atom_coords, atom_labels, site_properties = convert_uc_atoms_to_input_for_pymatgen(uc_atoms)
 
+        # Check the vectors from *.csv with the ones
+        # from geometry.xyz.
         lv1 = x[c_id - 1, 5]
         lv2 = x[c_id - 1, 6]
         lv3 = x[c_id - 1, 7]
@@ -193,6 +167,7 @@ def ewald_matrix_features(data,
         logger.info("lv1: {0}, lv2: {1}, lv3: {2}".format(lv1_c, lv2_c, lv3_c))
         logger.info("alpha: {0}, beta: {1}, gamma: {2}".format(alpha, beta, gamma))
 
+        # Create a lattice
         lattice = pymatgen.Lattice.from_parameters(a=lv1,
                                                    b=lv2,
                                                    c=lv3,
@@ -200,8 +175,10 @@ def ewald_matrix_features(data,
                                                    beta=beta,
                                                    gamma=gamma)
 
+        # Create a structure representation in pymatgen
         structure = pymatgen.Structure(lattice, atom_labels, atom_coords, site_properties=site_properties)
 
+        # Get the Ewald sum
         ewald_sum = ewald.EwaldSummation(structure)
 
         logger.info("ewald_sum: \n{0}".format(ewald_sum))
@@ -211,16 +188,19 @@ def ewald_matrix_features(data,
         logger.info("Point energy: {0}".format(ewald_sum.point_energy))
         logger.info("Total energy: {0}".format(ewald_sum.total_energy) )
 
+        # Calcualte the traces.
+        # Note: point_energy_matrix is an array. We convert it
+        # into a diagonal matrix and then compute the trace.
         ewald_sum_data[i][0] = np.trace(ewald_sum.real_space_energy_matrix)
         ewald_sum_data[i][1] = np.trace(ewald_sum.reciprocal_space_energy_matrix)
         ewald_sum_data[i][2] = np.trace(ewald_sum.total_energy_matrix)
-        ewald_sum_data[i][3] = np.sum(ewald_sum.point_energy_matrix)
+        ewald_sum_data[i][3] = np.trace(np.diag(ewald_sum.point_energy_matrix))
 
     # Take only space group and number of total atoms from x.
-    ewald_sum_data = np.hstack((x[:, 0:2], ewald_sum_data, y_bg))
-    # np.savetxt(file_name_type + "_ewald_sum_data.csv", ewald_sum_data, delimiter=",")
-    np.save(file_name, ewald_sum_data)
+    features = np.hstack((ewald_sum_data, x[:, 0:2], y_bg))
+    np.save(file_name, features)
 
+    return features
 
 def extract_data_by_index_and_value(features, index, value):
 
@@ -239,38 +219,58 @@ if __name__ == "__main__":
 
     features = None
     if os.path.isfile(file_name) == False:
-        ewald_matrix_features(data,
-                              data_type=data_type,
-                              file_name=file_name)
+        features = ewald_matrix_features(data,
+                                         data_type=data_type,
+                                         file_name=file_name)
     else:
         features = np.load(file_name)
+        logger.info("features.shape: {0}".format(features.shape))
 
     # nota - number of total atoms
     nota = [10, 20, 30, 40, 60, 80]
-    sg_index = 0
-    nota_index = 1
-    for i in range(len(nota)):
-        d_nota = extract_data_by_index_and_value(features, nota_index, nota[i])
 
-        sg = np.unique(d_nota[:, 0])
-        logger.info("sg: {0}".format(sg))
+    feature_index = {"real_space_energy_matrix": 0,
+                     "reciprocal_space_energy_matrix": 1,
+                     "total_energy_matrix": 2,
+                     "point_energy_matrix": 3,
+                     "spacegroup": 4,
+                     "number_of_total_atoms": 5,
+                     "band_gap": 6}
 
-        plt.figure()
-        for j in range(len(sg)):
+    to_plot = ["real_space_energy_matrix",
+               "reciprocal_space_energy_matrix",
+               "total_energy_matrix",
+               "point_energy_matrix"]
 
-            d_sg = extract_data_by_index_and_value(d_nota, sg_index, int(sg[j]))
+    for mat in to_plot:
+        logger.info("feature_index: {0}".format(feature_index[mat]))
+        for i in range(len(nota)):
 
-            x_ew = d_sg[:, -3]
-            y_bg = d_sg[:, -1]
+            d_nota = extract_data_by_index_and_value(features, feature_index["number_of_total_atoms"], nota[i])
+            logger.info("d_nota.shape: {0}".format(d_nota.shape))
 
-            p = np.polyfit(x_ew.ravel(), y_bg.ravel(), 2)
-            poly_model = np.poly1d(p)
-            xp = np.linspace(np.min(x_ew), np.max(x_ew), 1000)
+            sg = np.unique(d_nota[:, feature_index["spacegroup"]])
+            logger.info("sg: {0}".format(sg))
 
+            plt.figure()
+            for j in range(len(sg)):
 
-            # plt.scatter(d[:, -3], d[:, -1],
-            #             label=str(nota[i]))
-            plt.plot(x_ew.ravel(), y_bg.ravel(),'.', label=str(sg[j]))
-            plt.plot(xp, poly_model(xp), '--')
-        plt.legend(ncol=3)
-        plt.show()
+                d_sg = extract_data_by_index_and_value(d_nota, feature_index["spacegroup"], int(sg[j]))
+                logger.info("d_sg.shape: {0}".format(d_sg.shape))
+
+                x_ew = d_sg[:, feature_index[mat]]
+                y_bg = d_sg[:, feature_index["band_gap"]]
+
+                p = np.polyfit(x_ew.ravel(), y_bg.ravel(), 2)
+                poly_model = np.poly1d(p)
+                xp = np.linspace(np.min(x_ew), np.max(x_ew), 1000)
+
+                plt.plot(x_ew.ravel(), y_bg.ravel(),'.', label=str(int(sg[j])) + "; data")
+                plt.plot(xp, poly_model(xp), '--', label=str(int(sg[j])) + "; fit")
+            plt.legend(title="Space group:", ncol=3)
+            plt.title("Number of total atoms: {0}".format(int(nota[i])))
+            plt.xlabel("tr({0}) [a.u.]".format(mat))
+            plt.ylabel("band gap [eV]")
+            #plt.show()
+
+            plt.savefig("plot_{0}_{1}.png".format(mat, nota[i]))
