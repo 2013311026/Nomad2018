@@ -2,9 +2,10 @@ import logging
 import os
 
 import numpy as np
+import matplotlib.pyplot as plt
+
 import pymatgen
 from pymatgen.analysis import ewald
-
 
 
 logger = logging.getLogger(__name__)
@@ -221,12 +222,12 @@ def ewald_matrix_features(data,
     np.save(file_name, ewald_sum_data)
 
 
-def extract_feature_by_index_and_value(features, index, value):
+def extract_data_by_index_and_value(features, index, value):
 
     condition = features[:, index] == value
-    f = features[condition]
+    d = features[condition]
 
-    return f
+    return d
 
 
 if __name__ == "__main__":
@@ -234,10 +235,10 @@ if __name__ == "__main__":
     data = np.loadtxt("train.csv", delimiter=",", skiprows=1)
 
     data_type="train"
-    file_name = "ewald_sum_data.py"
+    file_name = "ewald_sum_data.npy"
 
     features = None
-    if os.path.isfile("")
+    if os.path.isfile(file_name) == False:
         ewald_matrix_features(data,
                               data_type=data_type,
                               file_name=file_name)
@@ -246,7 +247,30 @@ if __name__ == "__main__":
 
     # nota - number of total atoms
     nota = [10, 20, 30, 40, 60, 80]
+    sg_index = 0
     nota_index = 1
     for i in range(len(nota)):
-        f = extract_feature_by_index_and_value(features, nota_index, nota[i])
+        d_nota = extract_data_by_index_and_value(features, nota_index, nota[i])
 
+        sg = np.unique(d_nota[:, 0])
+        logger.info("sg: {0}".format(sg))
+
+        plt.figure()
+        for j in range(len(sg)):
+
+            d_sg = extract_data_by_index_and_value(d_nota, sg_index, int(sg[j]))
+
+            x_ew = d_sg[:, -3]
+            y_bg = d_sg[:, -1]
+
+            p = np.polyfit(x_ew.ravel(), y_bg.ravel(), 2)
+            poly_model = np.poly1d(p)
+            xp = np.linspace(np.min(x_ew), np.max(x_ew), 1000)
+
+
+            # plt.scatter(d[:, -3], d[:, -1],
+            #             label=str(nota[i]))
+            plt.plot(x_ew.ravel(), y_bg.ravel(),'.', label=str(sg[j]))
+            plt.plot(xp, poly_model(xp), '--')
+        plt.legend(ncol=3)
+        plt.show()
