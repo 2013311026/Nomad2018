@@ -138,7 +138,8 @@ def ewald_matrix_features(data,
     # x - the provides features in *.csv
     # y_fe - formation energy (not used here)
     # y_bg - band gap
-    ids, x, y_fe, y_bg = split_data_into_id_x_y(data)
+    ids, x, y_fe, y_bg = split_data_into_id_x_y(data,
+                                                data_type=data_type)
 
     n, m = ids.shape
     ewald_sum_data = np.zeros((n, 4))
